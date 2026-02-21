@@ -5,22 +5,7 @@ import { signIn, useSession } from "next-auth/react";
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
-
-/** Only allow internal paths. Reject /login to avoid redirect loops. */
-function sanitizeCallbackUrl(callbackUrl: string | null): string {
-  if (!callbackUrl || typeof callbackUrl !== "string") return "/onboarding";
-  try {
-    const path = new URL(callbackUrl, "https://x").pathname;
-    if (path === "/login" || path.startsWith("/login?")) return "/onboarding";
-    if (path === "/signup" || path.startsWith("/signup")) return "/onboarding";
-    if (["/", "/onboarding", "/dashboard", "/verify-email-pending", "/admin"].some((p) => p === path || path.startsWith(p + "/"))) {
-      return path;
-    }
-  } catch {
-    // ignore invalid URLs
-  }
-  return "/onboarding";
-}
+import { sanitizeCallbackUrl } from "@/lib/callback-url";
 
 function LoginForm() {
   const router = useRouter();
@@ -35,13 +20,13 @@ function LoginForm() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const { data: session, status } = useSession();
 
-  // If already signed in, leave immediately so we don't get stuck on this screen
+  // If already signed in, leave immediately so we don't get stuck on this screen (full-page redirect so cookie is sent)
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
-      router.replace(redirectTo);
-      router.refresh();
+      window.location.replace(redirectTo);
+      return;
     }
-  }, [status, session?.user, redirectTo, router]);
+  }, [status, session?.user, redirectTo]);
 
   useEffect(() => {
     fetch("/api/auth/providers")
@@ -66,8 +51,8 @@ function LoginForm() {
         setError("Invalid email or password");
         setLoading(false);
       } else {
-        router.replace(redirectTo);
-        router.refresh();
+        // Full-page redirect so the session cookie is sent on the next request (avoids getting stuck on login)
+        window.location.replace(redirectTo);
       }
     } catch (err) {
       setError("Something went wrong. Please try again.");
