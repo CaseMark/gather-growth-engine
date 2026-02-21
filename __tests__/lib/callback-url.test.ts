@@ -4,48 +4,48 @@
 import { sanitizeCallbackUrl } from "@/lib/callback-url";
 
 describe("sanitizeCallbackUrl", () => {
-  it("returns /onboarding when callbackUrl is null", () => {
-    expect(sanitizeCallbackUrl(null)).toBe("/onboarding");
+  it("returns /dashboard when callbackUrl is null", () => {
+    expect(sanitizeCallbackUrl(null)).toBe("/dashboard");
   });
 
-  it("returns /onboarding when callbackUrl is undefined", () => {
-    expect(sanitizeCallbackUrl(undefined as unknown as string | null)).toBe("/onboarding");
+  it("returns /dashboard when callbackUrl is undefined", () => {
+    expect(sanitizeCallbackUrl(undefined as unknown as string | null)).toBe("/dashboard");
   });
 
-  it("returns /onboarding when callbackUrl is empty string", () => {
-    expect(sanitizeCallbackUrl("")).toBe("/onboarding");
+  it("returns /dashboard when callbackUrl is empty string", () => {
+    expect(sanitizeCallbackUrl("")).toBe("/dashboard");
   });
 
-  it("returns /onboarding when callbackUrl is not a string", () => {
-    expect(sanitizeCallbackUrl(123 as unknown as string | null)).toBe("/onboarding");
+  it("returns /dashboard when callbackUrl is not a string", () => {
+    expect(sanitizeCallbackUrl(123 as unknown as string | null)).toBe("/dashboard");
   });
 
-  it("returns /onboarding for /login to avoid redirect loop", () => {
-    expect(sanitizeCallbackUrl("/login")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("https://gather-growth-engine.vercel.app/login")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("https://x/login")).toBe("/onboarding");
+  it("returns /dashboard for /login to avoid redirect loop", () => {
+    expect(sanitizeCallbackUrl("/login")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("https://gather-growth-engine.vercel.app/login")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("https://x/login")).toBe("/dashboard");
   });
 
-  it("returns /onboarding for /login with query (nested callbackUrl loop)", () => {
+  it("returns /dashboard for /login with query (nested callbackUrl loop)", () => {
     const nested =
       "https://gather-growth-engine.vercel.app/login?callbackUrl=https%3A%2F%2Fgather-growth-engine.vercel.app%2Fsignup";
-    expect(sanitizeCallbackUrl(nested)).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("https://x/login?callbackUrl=/onboarding")).toBe("/onboarding");
+    expect(sanitizeCallbackUrl(nested)).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("https://x/login?callbackUrl=/onboarding")).toBe("/dashboard");
   });
 
-  it("returns /onboarding for /signup so we do not redirect back to signup after login", () => {
-    expect(sanitizeCallbackUrl("/signup")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("https://x/signup")).toBe("/onboarding");
+  it("returns /dashboard for /signup so we do not redirect back to signup after login", () => {
+    expect(sanitizeCallbackUrl("/signup")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("https://x/signup")).toBe("/dashboard");
+  });
+
+  it("redirects /onboarding to /dashboard to avoid stuck login loop", () => {
+    expect(sanitizeCallbackUrl("/onboarding")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("https://gather-growth-engine.vercel.app/login?callbackUrl=%2Fonboarding")).toBe("/dashboard");
   });
 
   it("allows / and returns it", () => {
     expect(sanitizeCallbackUrl("/")).toBe("/");
     expect(sanitizeCallbackUrl("https://x/")).toBe("/");
-  });
-
-  it("allows /onboarding", () => {
-    expect(sanitizeCallbackUrl("/onboarding")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("https://gather-growth-engine.vercel.app/onboarding")).toBe("/onboarding");
   });
 
   it("allows /dashboard and subpaths", () => {
@@ -63,14 +63,14 @@ describe("sanitizeCallbackUrl", () => {
     expect(sanitizeCallbackUrl("/admin/analytics")).toBe("/admin/analytics");
   });
 
-  it("returns /onboarding for unknown or external paths", () => {
-    expect(sanitizeCallbackUrl("/other")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("/api/auth/session")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("https://evil.com/onboarding")).toBe("/onboarding"); // we only use pathname with base https://x
+  it("returns /dashboard for unknown or external paths", () => {
+    expect(sanitizeCallbackUrl("/other")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("/api/auth/session")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("https://evil.com/onboarding")).toBe("/dashboard");
   });
 
   it("handles invalid URL strings gracefully", () => {
-    expect(sanitizeCallbackUrl("not-a-url")).toBe("/onboarding");
-    expect(sanitizeCallbackUrl("://")).toBe("/onboarding");
+    expect(sanitizeCallbackUrl("not-a-url")).toBe("/dashboard");
+    expect(sanitizeCallbackUrl("://")).toBe("/dashboard");
   });
 });

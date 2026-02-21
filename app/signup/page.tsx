@@ -150,7 +150,7 @@ export default function SignupPage() {
               </div>
               <button
                 type="button"
-                onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+                onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
                 className="w-full rounded-md border border-zinc-600 bg-zinc-800 py-3 font-medium text-zinc-200 hover:bg-zinc-700"
               >
                 Continue with Google
