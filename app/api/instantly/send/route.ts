@@ -113,11 +113,11 @@ export async function POST(request: Request) {
     // Get a lead's steps array (from stepsJson or legacy step1/2/3), padded to numSteps
     type LeadWithSteps = typeof batch.leads[0] & { stepsJson?: string | null };
     const getLeadSteps = (lead: LeadWithSteps, numSteps: number): Array<{ subject: string; body: string }> => {
-      let arr: Array<{ subject: string; body: string }>;
+      let arr: Array<{ subject?: string; body?: string }>;
       try {
         if (lead.stepsJson) {
-          arr = JSON.parse(lead.stepsJson) as Array<{ subject?: string; body?: string }>;
-          if (!Array.isArray(arr)) arr = [];
+          const parsed = JSON.parse(lead.stepsJson) as unknown;
+          arr = Array.isArray(parsed) ? parsed : [];
         } else {
           arr = [];
         }
