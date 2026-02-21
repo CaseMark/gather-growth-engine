@@ -83,10 +83,14 @@ function createInstantlyClient(apiKey: string) {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     };
+    // POST/PATCH with application/json must send a body; some APIs reject empty body
+    const needsBody = method !== "GET" && method !== "HEAD";
+    const bodyPayload =
+      body !== undefined ? JSON.stringify(body) : needsBody ? "{}" : undefined;
     const res = await fetch(url, {
       method,
       headers,
-      ...(body !== undefined && { body: JSON.stringify(body) }),
+      ...(bodyPayload !== undefined && { body: bodyPayload }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
