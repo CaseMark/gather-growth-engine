@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <span className="text-lg font-semibold">Outbound Growth Engine</span>
+          <span className="text-lg font-semibold">{APP_DISPLAY_NAME}</span>
           <nav className="flex gap-6">
             <Link href="/login" className="text-zinc-400 hover:text-zinc-100">
               Log in

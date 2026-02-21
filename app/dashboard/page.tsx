@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { ChatPanel } from "@/components/ChatPanel";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 export default function DashboardPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
@@ -837,7 +838,7 @@ export default function DashboardPage() {
           <header className="border-b border-zinc-800/80 bg-zinc-950/95 flex-shrink-0">
             <div className="max-w-6xl px-6 py-4 flex items-center justify-between">
               <Link href="/dashboard" className="text-lg font-semibold text-zinc-100 tracking-tight">
-                Outbound Growth Engine
+                {APP_DISPLAY_NAME}
               </Link>
               <nav className="flex items-center gap-6 text-sm">
                 <Link href="/dashboard" className="font-medium text-zinc-200">

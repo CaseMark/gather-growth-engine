@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -48,7 +49,7 @@ function VerifyEmailContent() {
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
       <div className="w-full max-w-md space-y-6 text-center">
         <Link href="/" className="text-lg font-semibold text-zinc-100">
-          Outbound Growth Engine
+          {APP_DISPLAY_NAME}
         </Link>
 
         {status === "loading" && (

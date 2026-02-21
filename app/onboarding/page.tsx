@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 export default function OnboardingPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
@@ -88,7 +89,7 @@ export default function OnboardingPage() {
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link href="/dashboard" className="text-lg font-semibold">
-            Outbound Growth Engine
+            {APP_DISPLAY_NAME}
           </Link>
           <Link href="/dashboard" className="text-zinc-400 hover:text-zinc-100">
             &lt;- Dashboard

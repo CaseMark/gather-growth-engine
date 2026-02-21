@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 type Analytics = {
   totalUsers: number;
@@ -93,7 +94,7 @@ export default function AdminPage() {
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl flex items-center justify-between">
           <Link href="/dashboard" className="text-lg font-semibold text-zinc-100">
-            Outbound Growth Engine
+            {APP_DISPLAY_NAME}
           </Link>
           <span className="text-sm text-zinc-500">Admin · Analytics</span>
         </div>

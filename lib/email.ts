@@ -38,7 +38,7 @@ export async function sendVerificationEmail(
       body: JSON.stringify({
         from: RESEND_FROM_EMAIL,
         to: email,
-        subject: "Verify your email for Gather Growth Engine",
+        subject: "Verify your email for Outbound Growth Engine",
         html: `
           <h2>Welcome to Outbound Growth Engine!</h2>
           <p>Hi ${name},</p>

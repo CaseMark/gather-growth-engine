@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 export default function VerifyEmailPendingPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
@@ -12,6 +13,8 @@ export default function VerifyEmailPendingPage() {
   const [userEmail, setUserEmail] = useState("");
   const [checking, setChecking] = useState(false);
   const [notVerifiedYet, setNotVerifiedYet] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -44,7 +47,7 @@ export default function VerifyEmailPendingPage() {
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
       <div className="w-full max-w-md space-y-6 text-center">
         <Link href="/" className="text-lg font-semibold text-zinc-100">
-          Outbound Growth Engine
+          {APP_DISPLAY_NAME}
         </Link>
 
         <div className="mt-8">
@@ -87,7 +90,36 @@ export default function VerifyEmailPendingPage() {
             Verification not detected yet. Click the link in your email, then try again.
           </p>
         )}
+        {resendMessage && (
+          <p className={`text-sm ${resendMessage.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
+            {resendMessage.text}
+          </p>
+        )}
         <div className="mt-6 space-y-3">
+          <button
+            type="button"
+            onClick={async () => {
+              setResendMessage(null);
+              setResendLoading(true);
+              try {
+                const res = await fetch("/api/auth/resend-verification", { method: "POST" });
+                const data = await res.json();
+                if (res.ok) {
+                  setResendMessage({ type: "success", text: data.message || "Email sent. Check your inbox." });
+                } else {
+                  setResendMessage({ type: "error", text: data.error || "Failed to resend." });
+                }
+              } catch {
+                setResendMessage({ type: "error", text: "Failed to resend." });
+              } finally {
+                setResendLoading(false);
+              }
+            }}
+            disabled={resendLoading}
+            className="w-full rounded-md border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+          >
+            {resendLoading ? "Sending…" : "Resend verification email"}
+          </button>
           <button
             onClick={async () => {
               setNotVerifiedYet(false);

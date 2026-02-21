@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 
+const appTitle = process.env.NEXT_PUBLIC_APP_VERSION
+  ? `Outbound Growth Engine · ${process.env.NEXT_PUBLIC_APP_VERSION}`
+  : "Outbound Growth Engine";
+
 export const metadata: Metadata = {
-  title: "Outbound Growth Engine",
+  title: appTitle,
   description: "Automated outbound engine that does what SDRs do.",
 };
 

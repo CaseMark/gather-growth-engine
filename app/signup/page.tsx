@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -12,6 +13,14 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/providers")
+      .then((res) => res.json())
+      .then((data) => setGoogleEnabled(Boolean(data?.google)))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +74,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
           <Link href="/" className="text-lg font-semibold text-zinc-100">
-            Outbound Growth Engine
+            {APP_DISPLAY_NAME}
           </Link>
           <h2 className="mt-6 text-2xl font-semibold">Sign up</h2>
         </div>
@@ -129,7 +138,7 @@ export default function SignupPage() {
           >
             {loading ? "Creating account..." : "Create account"}
           </button>
-          {process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" && (
+          {googleEnabled && (
             <>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
