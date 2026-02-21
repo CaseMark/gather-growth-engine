@@ -10,6 +10,8 @@ export default function VerifyEmailPendingPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [notVerifiedYet, setNotVerifiedYet] = useState(false);
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -73,16 +75,41 @@ export default function VerifyEmailPendingPage() {
 
         <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 text-left">
           <p className="text-sm text-zinc-400">
-            <strong className="text-zinc-300">Running locally?</strong> The verification link is printed in the <strong>same terminal where you ran <code className="rounded bg-zinc-800 px-1">npm run dev</code></strong>. Right after you signed up, a block of text appeared there. Look for the line that says <strong>&quot;COPY THIS LINK INTO YOUR BROWSER&quot;</strong> and copy the URL on the next line (starts with http://localhost:3000/verify-email?token=...) into your browser address bar.
+            Check your inbox and spam folder for an email from us. Click the link in the email to verify your account. The link expires in 24 hours.
+          </p>
+          <p className="mt-3 text-xs text-zinc-500">
+            Running locally? The verification link is also printed in the terminal where you ran <code className="rounded bg-zinc-800 px-1">npm run dev</code>.
           </p>
         </div>
 
+        {notVerifiedYet && (
+          <p className="text-sm text-amber-400">
+            Verification not detected yet. Click the link in your email, then try again.
+          </p>
+        )}
         <div className="mt-6 space-y-3">
           <button
-            onClick={() => router.refresh()}
-            className="w-full rounded-md border border-zinc-700 px-4 py-2 font-medium text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
+            onClick={async () => {
+              setNotVerifiedYet(false);
+              setChecking(true);
+              try {
+                const res = await fetch("/api/auth/check-verification");
+                const data = await res.json();
+                if (data.verified) {
+                  router.replace("/onboarding");
+                  return;
+                }
+                setNotVerifiedYet(true);
+              } catch {
+                setNotVerifiedYet(true);
+              } finally {
+                setChecking(false);
+              }
+            }}
+            disabled={checking}
+            className="w-full rounded-md border border-zinc-700 px-4 py-2 font-medium text-zinc-300 hover:border-zinc-600 hover:text-zinc-100 disabled:opacity-50"
           >
-            I've verified my email
+            {checking ? "Checking..." : "I've verified my email"}
           </button>
           <Link
             href="/login"
