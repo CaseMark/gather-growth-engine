@@ -143,6 +143,10 @@ model Lead {
   vertical           String?   // from classify (e.g. "SaaS")
   step1Subject       String?   // personalized first email subject
   step1Body          String?   // personalized first email body
+  step2Subject       String?   // step 2 subject (sequence)
+  step2Body          String?   // step 2 body
+  step3Subject       String?   // step 3 subject
+  step3Body          String?   // step 3 body
   abVariant          String?   // "A" | "B" when sent as part of A/B test
   createdAt          DateTime  @default(now())
 

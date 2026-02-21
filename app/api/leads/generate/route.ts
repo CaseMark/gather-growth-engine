@@ -44,8 +44,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid playbook. Generate and approve a playbook first." }, { status: 400 });
     }
 
-    const step1 = playbook.steps[0];
-    if (!step1) {
+    const steps = playbook.steps.slice(0, 3); // up to 3 steps
+    if (steps.length === 0) {
       return NextResponse.json({ error: "Playbook has no steps." }, { status: 400 });
     }
 
@@ -72,6 +72,10 @@ export async function POST(request: Request) {
       memory = null;
     }
 
+    const templatesJson = steps
+      .map((s, i) => `Step ${i + 1} subject: ${s.subject}\nStep ${i + 1} body: ${s.body}`)
+      .join("\n\n");
+
     for (const lead of batch.leads) {
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
@@ -89,10 +93,10 @@ export async function POST(request: Request) {
         }
       }
 
-      const prompt = `You are writing a personalized cold outreach email for one lead. Use the template below but adapt the subject and body so they feel personal to this specific lead (use their name, company, job title, industry). Keep the same structure and length. Use placeholders {{firstName}} for first name (derive from name or email), {{company}} for company, {{senderName}} for the sender (we'll fill later).
+      const prompt = `You are writing a personalized cold outreach SEQUENCE (${steps.length} emails) for one lead. Personalize each step for this lead (use their name, company, job title, industry). Keep structure and length. Use placeholders {{firstName}}, {{company}}, {{senderName}} where needed.
 
 Product summary: ${productSummary}
-ICP we're targeting: ${icp}${proofPointsText}${strategyBlock}
+ICP: ${icp}${proofPointsText}${strategyBlock}
 
 Lead:
 - Email: ${lead.email}
@@ -101,34 +105,55 @@ Lead:
 - Company: ${lead.company ?? "unknown"}
 - Industry: ${lead.industry ?? "unknown"}${lead.persona || lead.vertical ? `\n- Persona: ${lead.persona ?? ""}\n- Vertical: ${lead.vertical ?? ""}` : ""}
 
-Template subject: ${step1.subject}
-Template body: ${step1.body}
+Templates (personalize each for this lead):
+${templatesJson}
 
-Respond with ONLY a valid JSON object, no other text:
-{"subject": "personalized subject line", "body": "personalized email body"}`;
+Respond with ONLY a valid JSON object with keys step1, step2, step3 (only include steps that exist in the templates above). Each step: { "subject": "...", "body": "..." }
+Example: {"step1": {"subject": "...", "body": "..."}, "step2": {"subject": "...", "body": "..."}, "step3": {"subject": "...", "body": "..."}}`;
 
       try {
-        const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 800 });
+        const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400 });
         let jsonStr = raw.trim();
         const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlock) jsonStr = codeBlock[1].trim();
-        const parsed = JSON.parse(jsonStr) as { subject: string; body: string };
+        const parsed = JSON.parse(jsonStr) as Record<string, { subject?: string; body?: string }>;
+
+        const update: Record<string, string | null> = {};
+        if (steps[0]) {
+          update.step1Subject = (parsed.step1?.subject ?? steps[0].subject) || null;
+          update.step1Body = (parsed.step1?.body ?? steps[0].body) || null;
+        }
+        if (steps[1]) {
+          update.step2Subject = (parsed.step2?.subject ?? steps[1].subject) || null;
+          update.step2Body = (parsed.step2?.body ?? steps[1].body) || null;
+        }
+        if (steps[2]) {
+          update.step3Subject = (parsed.step3?.subject ?? steps[2].subject) || null;
+          update.step3Body = (parsed.step3?.body ?? steps[2].body) || null;
+        }
 
         await prisma.lead.update({
           where: { id: lead.id },
-          data: {
-            step1Subject: parsed.subject ?? step1.subject,
-            step1Body: parsed.body ?? step1.body,
-          },
+          data: update,
         });
       } catch (err) {
         console.error(`Lead ${lead.id} personalize error:`, err);
+        const fallback: Record<string, string | null> = {};
+        if (steps[0]) {
+          fallback.step1Subject = steps[0].subject;
+          fallback.step1Body = steps[0].body;
+        }
+        if (steps[1]) {
+          fallback.step2Subject = steps[1].subject;
+          fallback.step2Body = steps[1].body;
+        }
+        if (steps[2]) {
+          fallback.step3Subject = steps[2].subject;
+          fallback.step3Body = steps[2].body;
+        }
         await prisma.lead.update({
           where: { id: lead.id },
-          data: {
-            step1Subject: step1.subject,
-            step1Body: step1.body,
-          },
+          data: fallback,
         });
       }
     }

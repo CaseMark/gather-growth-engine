@@ -48,6 +48,8 @@ export default function DashboardPage() {
   const [leadPipelineMessage, setLeadPipelineMessage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [generatingLeads, setGeneratingLeads] = useState(false);
+  const [prepareLeadsLoading, setPrepareLeadsLoading] = useState(false);
+  const [deleteBatchLoading, setDeleteBatchLoading] = useState(false);
   const [leadsError, setLeadsError] = useState("");
   const [sendingToInstantly, setSendingToInstantly] = useState(false);
   const [sendToInstantlyResult, setSendToInstantlyResult] = useState<{ campaignName?: string; leads_uploaded?: number; message?: string } | null>(null);
@@ -552,6 +554,79 @@ export default function DashboardPage() {
     } catch {
       setLeadsError("Classify failed.");
       setClassifyingLeads(false);
+    }
+  };
+
+  const handlePrepareLeads = async () => {
+    if (!selectedBatchId) return;
+    setPrepareLeadsLoading(true);
+    setLeadsError("");
+    setLeadPipelineMessage(null);
+    try {
+      let msg = "";
+      const res1 = await fetch("/api/leads/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId: selectedBatchId }),
+      });
+      const d1 = await res1.json();
+      if (!res1.ok) {
+        setLeadsError(d1.error ?? "Generate failed");
+        setPrepareLeadsLoading(false);
+        return;
+      }
+      msg = d1.message ?? "Generated";
+
+      const res2 = await fetch("/api/leads/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId: selectedBatchId }),
+      });
+      const d2 = await res2.json();
+      if (res2.ok) msg += " · " + (d2.message ?? "Verified");
+
+      const res3 = await fetch("/api/leads/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId: selectedBatchId }),
+      });
+      const d3 = await res3.json();
+      if (res3.ok) msg += " · " + (d3.message ?? "Classified");
+
+      setLeadPipelineMessage(msg);
+      const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
+      setLeads(list.leads ?? []);
+    } catch {
+      setLeadsError("Prepare failed.");
+    } finally {
+      setPrepareLeadsLoading(false);
+    }
+  };
+
+  const handleDeleteBatch = async () => {
+    if (!selectedBatchId) return;
+    if (!confirm("Delete this batch and all its leads? This cannot be undone.")) return;
+    setDeleteBatchLoading(true);
+    setLeadsError("");
+    setLeadPipelineMessage(null);
+    try {
+      const res = await fetch(`/api/leads/batch/${selectedBatchId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setLeadsError(data.error ?? "Delete failed");
+        setDeleteBatchLoading(false);
+        return;
+      }
+      setSelectedBatchId(null);
+      setLeads([]);
+      const list = await fetch("/api/leads").then((r) => r.json());
+      setBatches(list.batches ?? []);
+      if (list.batches?.length > 0) setSelectedBatchId(list.batches[0].id);
+      setLeadPipelineMessage("Batch deleted.");
+    } catch {
+      setLeadsError("Delete failed.");
+    } finally {
+      setDeleteBatchLoading(false);
     }
   };
 
@@ -1185,27 +1260,20 @@ export default function DashboardPage() {
                       ))}
                     </select>
                     <button
-                      onClick={handleGenerateLeads}
-                      disabled={generatingLeads || !selectedBatchId}
+                      onClick={handleDeleteBatch}
+                      disabled={deleteBatchLoading || !selectedBatchId}
+                      className="rounded-md border border-red-800 bg-red-900/40 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/60 disabled:opacity-50"
+                      title="Delete this batch and all its leads"
+                    >
+                      {deleteBatchLoading ? "Deleting..." : "Delete batch"}
+                    </button>
+                    <button
+                      onClick={handlePrepareLeads}
+                      disabled={prepareLeadsLoading || !selectedBatchId}
                       className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                      title="Generate 3 emails per lead, verify, and classify (persona + vertical)"
                     >
-                      {generatingLeads ? "Generating emails..." : "Generate personalized emails"}
-                    </button>
-                    <button
-                      onClick={handleVerifyLeads}
-                      disabled={verifyingLeads || !selectedBatchId || leads.length === 0}
-                      className="rounded-md border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-                      title="Check email syntax and MX records"
-                    >
-                      {verifyingLeads ? "Verifying..." : "Verify emails"}
-                    </button>
-                    <button
-                      onClick={handleClassifyLeads}
-                      disabled={classifyingLeads || !selectedBatchId || leads.length === 0}
-                      className="rounded-md border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-                      title="Assign persona and vertical from ICP (uses Claude)"
-                    >
-                      {classifyingLeads ? "Classifying..." : "Classify (persona + vertical)"}
+                      {prepareLeadsLoading ? "Preparing..." : "Prepare leads"}
                     </button>
                     <button
                       onClick={handleSendToInstantly}
