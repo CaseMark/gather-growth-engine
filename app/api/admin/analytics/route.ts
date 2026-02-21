@@ -42,7 +42,7 @@ export async function GET() {
       prisma.user.findMany({
         take: 20,
         orderBy: { createdAt: "desc" },
-        select: { id: true, email: true, name: true, createdAt: true },
+        select: { id: true, email: true, name: true, createdAt: true, emailVerified: true },
       }),
       prisma.sentCampaign.findMany({
         take: 20,
@@ -66,9 +66,11 @@ export async function GET() {
       totalLeads,
       workspacesWithDomain,
       recentUsers: recentUsers.map((u) => ({
+        id: u.id,
         email: u.email,
         name: u.name,
         createdAt: u.createdAt.toISOString(),
+        emailVerified: !!u.emailVerified,
       })),
       recentCampaigns: recentCampaigns.map((c) => ({
         name: c.name,

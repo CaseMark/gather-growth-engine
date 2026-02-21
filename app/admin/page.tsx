@@ -12,7 +12,7 @@ type Analytics = {
   totalCampaigns: number;
   totalLeads: number;
   workspacesWithDomain: number;
-  recentUsers: Array<{ email: string; name: string | null; createdAt: string }>;
+  recentUsers: Array<{ id: string; email: string; name: string | null; createdAt: string; emailVerified: boolean }>;
   recentCampaigns: Array<{
     name: string;
     variant: string | null;
@@ -28,6 +28,16 @@ export default function AdminPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState<string | null>(null);
+
+  const refetchAnalytics = () => {
+    fetch("/api/admin/analytics")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && !data.error) setAnalytics(data);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -80,6 +90,24 @@ export default function AdminPage() {
       </div>
     );
   }
+
+  const handleVerifyUserEmail = async (email: string) => {
+    setVerifyingEmail(email);
+    try {
+      const res = await fetch("/api/admin/verify-user-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok) refetchAnalytics();
+      else alert(data.error ?? "Failed to verify");
+    } catch {
+      alert("Failed to verify");
+    } finally {
+      setVerifyingEmail(null);
+    }
+  };
 
   if (!analytics) {
     return (
@@ -166,16 +194,35 @@ export default function AdminPage() {
                   <tr className="border-b border-zinc-700 text-left text-zinc-500">
                     <th className="pb-2 pr-3">Email</th>
                     <th className="pb-2 pr-3">Name</th>
-                    <th className="pb-2">Signed up</th>
+                    <th className="pb-2 pr-3">Signed up</th>
+                    <th className="pb-2 pr-3">Verified</th>
+                    <th className="pb-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {analytics.recentUsers.map((u) => (
-                    <tr key={u.email} className="border-b border-zinc-800">
+                    <tr key={u.id} className="border-b border-zinc-800">
                       <td className="py-2 pr-3 text-zinc-200">{u.email}</td>
                       <td className="py-2 pr-3 text-zinc-400">{u.name ?? "—"}</td>
-                      <td className="py-2 text-zinc-500">
+                      <td className="py-2 pr-3 text-zinc-500">
                         {new Date(u.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-2 pr-3 text-zinc-500">
+                        {u.emailVerified ? "Yes" : "No"}
+                      </td>
+                      <td className="py-2">
+                        {u.emailVerified ? (
+                          <span className="text-zinc-600 text-xs">—</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyUserEmail(u.email)}
+                            disabled={verifyingEmail === u.email}
+                            className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
+                          >
+                            {verifyingEmail === u.email ? "Verifying..." : "Verify email"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

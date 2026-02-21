@@ -17,11 +17,12 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { batchId, abTest, subjectLineA, subjectLineB } = body as {
+    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput } = body as {
       batchId?: string;
       abTest?: boolean;
       subjectLineA?: string;
       subjectLineB?: string;
+      campaignName?: string;
     };
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -67,7 +68,8 @@ export async function POST(request: Request) {
 
     await client.applyRampForUnwarmedAccounts({ unwarmedDailyLimit: 15 });
 
-    const baseName = `Gather ${batch.name ?? batch.id.slice(0, 8)} ${new Date().toISOString().slice(0, 10)}`;
+    const defaultName = `Gather ${batch.name ?? batch.id.slice(0, 8)} ${new Date().toISOString().slice(0, 10)}`;
+    const baseName = campaignNameInput?.trim() || defaultName;
 
     if (abTest) {
       // A/B: assign leads 50/50, create two campaigns, record with abGroupId

@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [leadsError, setLeadsError] = useState("");
   const [sendingToInstantly, setSendingToInstantly] = useState(false);
   const [sendToInstantlyResult, setSendToInstantlyResult] = useState<{ campaignName?: string; leads_uploaded?: number; message?: string } | null>(null);
+  const [campaignNameInput, setCampaignNameInput] = useState("");
   const [abTestEnabled, setAbTestEnabled] = useState(false);
   const [subjectLineA, setSubjectLineA] = useState("");
   const [subjectLineB, setSubjectLineB] = useState("");
@@ -693,12 +694,13 @@ export default function DashboardPage() {
     setLeadsError("");
     setSendToInstantlyResult(null);
     try {
-      const body: { batchId: string; abTest?: boolean; subjectLineA?: string; subjectLineB?: string } = { batchId: selectedBatchId };
+      const body: { batchId: string; abTest?: boolean; subjectLineA?: string; subjectLineB?: string; campaignName?: string } = { batchId: selectedBatchId };
       if (abTestEnabled) {
         body.abTest = true;
         body.subjectLineA = subjectLineA.trim();
         body.subjectLineB = subjectLineB.trim();
       }
+      if (campaignNameInput.trim()) body.campaignName = campaignNameInput.trim();
       const res = await fetch("/api/instantly/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1283,10 +1285,24 @@ export default function DashboardPage() {
                     >
                       {sendingToInstantly ? "Sending..." : "Send to Instantly"}
                     </button>
+                    <span className="text-xs text-zinc-500">
+                      Sending from all {instantlyAccounts.length} Instantly account{instantlyAccounts.length !== 1 ? "s" : ""} in your workspace.
+                      {instantlyAccounts.length === 0 && " Add accounts in Instantly or use Domains & inboxes below."}
+                    </span>
                   </div>
                 )}
                 {batches.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-zinc-700 space-y-3">
+                    <div>
+                      <span className="text-xs text-zinc-500 block mb-1">Campaign name (optional)</span>
+                      <input
+                        type="text"
+                        value={campaignNameInput}
+                        onChange={(e) => setCampaignNameInput(e.target.value)}
+                        placeholder="e.g. Q1 Outbound - Batch 1 (default: Gather [batch] [date])"
+                        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
                     <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
                       <input
                         type="checkbox"
