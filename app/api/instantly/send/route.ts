@@ -79,6 +79,12 @@ export async function POST(request: Request) {
 
     const baseName = campaignNameTrimmed;
 
+    // Ensure email body line breaks render in Instantly (plain \n -> <br> for HTML)
+    const bodyWithLineBreaks = (text: string) =>
+      (text ?? "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\n/g, "<br>\n");
+
     // Build sequence steps from approved playbook so the campaign has email steps in Instantly
     let sequenceSteps: Array<{ subject: string; body: string; delayDays: number }> = [];
     try {
@@ -86,7 +92,7 @@ export async function POST(request: Request) {
       if (playbook?.steps?.length) {
         sequenceSteps = playbook.steps.slice(0, 3).map((s) => ({
           subject: s.subject ?? "Follow up",
-          body: s.body ?? "",
+          body: bodyWithLineBreaks(s.body ?? ""),
           delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
         }));
       }
@@ -127,7 +133,7 @@ export async function POST(request: Request) {
           first_name: l.name?.split(/\s+/)[0] ?? null,
           last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
           company_name: l.company ?? null,
-          personalization: l.step1Body ?? undefined,
+          personalization: bodyWithLineBreaks(l.step1Body ?? "").trim() || undefined,
           custom_variables: { subject_line: subject },
         }));
 
@@ -203,7 +209,7 @@ export async function POST(request: Request) {
       first_name: l.name?.split(/\s+/)[0] ?? null,
       last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
       company_name: l.company ?? null,
-      personalization: l.step1Body ?? undefined,
+      personalization: bodyWithLineBreaks(l.step1Body ?? "").trim() || undefined,
       custom_variables: l.step1Subject ? { subject_line: l.step1Subject } : undefined,
     }));
 
