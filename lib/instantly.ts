@@ -186,11 +186,18 @@ function createInstantlyClient(apiKey: string) {
       return request("PATCH", `/accounts/${encoded}`, data);
     },
 
-    /** Apply conservative ramp for accounts that are not warmed up: lower daily_limit, enable_slow_ramp. Leaves warmed accounts unchanged. */
+    /** Apply conservative ramp for accounts that are not warmed up: lower daily_limit, enable_slow_ramp. Leaves warmed accounts unchanged. If accountEmails is provided, only those accounts are updated. */
     async applyRampForUnwarmedAccounts(options?: {
       unwarmedDailyLimit?: number;
+      /** If set, only apply ramp to these account emails; otherwise all accounts. */
+      accountEmails?: string[];
     }): Promise<{ updated: number }> {
-      const accounts = await this.listAccounts();
+      let accounts = await this.listAccounts();
+      const filter = options?.accountEmails;
+      if (filter != null && filter.length > 0) {
+        const set = new Set(filter.map((e) => e.toLowerCase().trim()));
+        accounts = accounts.filter((a) => set.has(a.email.toLowerCase()));
+      }
       const unwarmedLimit = options?.unwarmedDailyLimit ?? 15;
       let updated = 0;
       for (const acc of accounts) {
@@ -209,20 +216,24 @@ function createInstantlyClient(apiKey: string) {
       return { updated };
     },
 
-    /** Create a campaign. Returns campaign id. */
+    /** Create a campaign. Returns campaign id. email_list = account emails to send from; if omitted, Instantly uses all workspace accounts. */
     async createCampaign(
       name: string,
-      schedule?: {
-        from?: string;
-        to?: string;
-        days?: boolean[];
-        timezone?: string;
+      options?: {
+        schedule?: {
+          from?: string;
+          to?: string;
+          days?: boolean[];
+          timezone?: string;
+        };
+        /** Account emails to use for sending. If provided, only these accounts are used; otherwise all workspace accounts. */
+        email_list?: string[];
       }
     ): Promise<{ id: string }> {
+      const schedule = options?.schedule;
       const from = schedule?.from ?? "09:00";
       const to = schedule?.to ?? "17:00";
       const days = schedule?.days ?? [true, true, true, true, true, false, false]; // Mon-Fri
-      // Instantly API only accepts specific timezone values from their enum (e.g. America/Chicago, Etc/GMT+12)
       const timezone = schedule?.timezone ?? "America/Chicago";
       const campaign_schedule = {
         schedules: [
@@ -234,10 +245,14 @@ function createInstantlyClient(apiKey: string) {
           },
         ],
       };
-      const data = await request<{ id?: string }>("POST", "/campaigns", {
+      const body: { name: string; campaign_schedule: typeof campaign_schedule; email_list?: string[] } = {
         name,
         campaign_schedule,
-      });
+      };
+      if (options?.email_list != null && options.email_list.length > 0) {
+        body.email_list = options.email_list;
+      }
+      const data = await request<{ id?: string }>("POST", "/campaigns", body);
       const id =
         (data as { id?: string }).id ??
         (data as { campaign?: { id?: string } }).campaign?.id ??

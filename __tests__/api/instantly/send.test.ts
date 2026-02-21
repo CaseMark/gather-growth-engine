@@ -33,7 +33,7 @@ describe("POST /api/instantly/send", () => {
 
     const req = new Request("http://localhost/api/instantly/send", {
       method: "POST",
-      body: JSON.stringify({ batchId: "batch-1" }),
+      body: JSON.stringify({ batchId: "batch-1", campaignName: "Test" }),
       headers: { "Content-Type": "application/json" },
     });
 
@@ -43,12 +43,27 @@ describe("POST /api/instantly/send", () => {
     expect(data.error).toBe("Unauthorized");
   });
 
+  it("returns 400 when campaign name is empty", async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({ user: { id: "user-1" } });
+
+    const req = new Request("http://localhost/api/instantly/send", {
+      method: "POST",
+      body: JSON.stringify({ batchId: "batch-1", campaignName: "   " }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe("Campaign name is required");
+  });
+
   it("returns 400 when batchId is missing", async () => {
     (getServerSession as jest.Mock).mockResolvedValue({ user: { id: "user-1" } });
 
     const req = new Request("http://localhost/api/instantly/send", {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({ campaignName: "Test" }),
       headers: { "Content-Type": "application/json" },
     });
 
@@ -68,7 +83,7 @@ describe("POST /api/instantly/send", () => {
 
     const req = new Request("http://localhost/api/instantly/send", {
       method: "POST",
-      body: JSON.stringify({ batchId: "batch-1", abTest: true }),
+      body: JSON.stringify({ batchId: "batch-1", campaignName: "AB Test", abTest: true }),
       headers: { "Content-Type": "application/json" },
     });
 

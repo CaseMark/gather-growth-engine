@@ -54,6 +54,8 @@ export default function DashboardPage() {
   const [sendingToInstantly, setSendingToInstantly] = useState(false);
   const [sendToInstantlyResult, setSendToInstantlyResult] = useState<{ campaignName?: string; leads_uploaded?: number; message?: string } | null>(null);
   const [campaignNameInput, setCampaignNameInput] = useState("");
+  /** Selected Instantly account emails to send from. Empty array = use all accounts. */
+  const [selectedAccountEmails, setSelectedAccountEmails] = useState<string[]>([]);
   const [abTestEnabled, setAbTestEnabled] = useState(false);
   const [subjectLineA, setSubjectLineA] = useState("");
   const [subjectLineB, setSubjectLineB] = useState("");
@@ -686,6 +688,10 @@ export default function DashboardPage() {
 
   const handleSendToInstantly = async () => {
     if (!selectedBatchId) return;
+    if (!campaignNameInput.trim()) {
+      setLeadsError("Enter a campaign name.");
+      return;
+    }
     if (abTestEnabled && (!subjectLineA.trim() || !subjectLineB.trim())) {
       setLeadsError("A/B test requires both Subject A and Subject B.");
       return;
@@ -694,13 +700,16 @@ export default function DashboardPage() {
     setLeadsError("");
     setSendToInstantlyResult(null);
     try {
-      const body: { batchId: string; abTest?: boolean; subjectLineA?: string; subjectLineB?: string; campaignName?: string } = { batchId: selectedBatchId };
+      const body: { batchId: string; abTest?: boolean; subjectLineA?: string; subjectLineB?: string; campaignName: string; accountEmails?: string[] } = {
+        batchId: selectedBatchId,
+        campaignName: campaignNameInput.trim(),
+      };
       if (abTestEnabled) {
         body.abTest = true;
         body.subjectLineA = subjectLineA.trim();
         body.subjectLineB = subjectLineB.trim();
       }
-      if (campaignNameInput.trim()) body.campaignName = campaignNameInput.trim();
+      if (selectedAccountEmails.length > 0) body.accountEmails = selectedAccountEmails;
       const res = await fetch("/api/instantly/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1261,6 +1270,16 @@ export default function DashboardPage() {
                         </option>
                       ))}
                     </select>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-zinc-400 whitespace-nowrap">Campaign name:</span>
+                      <input
+                        type="text"
+                        value={campaignNameInput}
+                        onChange={(e) => setCampaignNameInput(e.target.value)}
+                        placeholder="e.g. Q1 Outbound - Batch 1"
+                        className="min-w-[200px] rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
                     <button
                       onClick={handleDeleteBatch}
                       disabled={deleteBatchLoading || !selectedBatchId}
@@ -1279,29 +1298,68 @@ export default function DashboardPage() {
                     </button>
                     <button
                       onClick={handleSendToInstantly}
-                      disabled={sendingToInstantly || !selectedBatchId || leads.length === 0}
+                      disabled={sendingToInstantly || !selectedBatchId || leads.length === 0 || !campaignNameInput.trim()}
                       className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
                       title="Create Instantly campaign, add leads, apply slow ramp for unwarmed mailboxes, and activate"
                     >
                       {sendingToInstantly ? "Sending..." : "Send to Instantly"}
                     </button>
-                    <span className="text-xs text-zinc-500">
-                      Sending from all {instantlyAccounts.length} Instantly account{instantlyAccounts.length !== 1 ? "s" : ""} in your workspace.
-                      {instantlyAccounts.length === 0 && " Add accounts in Instantly or use Domains & inboxes below."}
-                    </span>
                   </div>
                 )}
                 {batches.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-zinc-700 space-y-3">
                     <div>
-                      <span className="text-xs text-zinc-500 block mb-1">Campaign name (optional)</span>
-                      <input
-                        type="text"
-                        value={campaignNameInput}
-                        onChange={(e) => setCampaignNameInput(e.target.value)}
-                        placeholder="e.g. Q1 Outbound - Batch 1 (default: Gather [batch] [date])"
-                        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                      />
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="text-sm text-zinc-400">Accounts to send from:</span>
+                        {selectedAccountEmails.length > 0 ? (
+                          <>
+                            <span className="text-xs text-zinc-500">{selectedAccountEmails.length} of {instantlyAccounts.length} selected</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccountEmails([])}
+                              className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                            >
+                              Use all accounts
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-zinc-500">All ({instantlyAccounts.length}) accounts</span>
+                        )}
+                      </div>
+                      {instantlyAccounts.length > 0 && (
+                        <div className="max-h-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
+                          {instantlyAccounts.slice(0, 500).map((acc) => {
+                            const isAll = selectedAccountEmails.length === 0;
+                            const checked = isAll || selectedAccountEmails.includes(acc.email);
+                            return (
+                              <label key={acc.email} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-1 py-0.5">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    if (selectedAccountEmails.length === 0) {
+                                      setSelectedAccountEmails(instantlyAccounts.map((a) => a.email).filter((e) => e !== acc.email));
+                                    } else if (selectedAccountEmails.includes(acc.email)) {
+                                      setSelectedAccountEmails(selectedAccountEmails.filter((e) => e !== acc.email));
+                                    } else {
+                                      setSelectedAccountEmails([...selectedAccountEmails, acc.email]);
+                                    }
+                                  }}
+                                  className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                                />
+                                <span className="truncate">{acc.email}</span>
+                                {acc.warmup_status !== 1 && <span className="text-xs text-zinc-500">(warmup)</span>}
+                              </label>
+                            );
+                          })}
+                          {instantlyAccounts.length > 500 && (
+                            <p className="text-xs text-zinc-500 pt-1">Showing first 500. Use &quot;Use all accounts&quot; or filter in Instantly.</p>
+                          )}
+                        </div>
+                      )}
+                      {instantlyAccounts.length === 0 && (
+                        <p className="text-xs text-zinc-500">No accounts yet. Add them in Instantly or use Domains & inboxes below.</p>
+                      )}
                     </div>
                     <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
                       <input

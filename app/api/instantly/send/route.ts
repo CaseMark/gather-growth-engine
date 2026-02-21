@@ -17,15 +17,20 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput } = body as {
+    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput, accountEmails } = body as {
       batchId?: string;
       abTest?: boolean;
       subjectLineA?: string;
       subjectLineB?: string;
       campaignName?: string;
+      accountEmails?: string[];
     };
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
+    }
+    const campaignNameTrimmed = campaignNameInput?.trim();
+    if (!campaignNameTrimmed) {
+      return NextResponse.json({ error: "Campaign name is required" }, { status: 400 });
     }
     if (abTest && (!subjectLineA?.trim() || !subjectLineB?.trim())) {
       return NextResponse.json(
@@ -33,6 +38,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    const selectedEmails = Array.isArray(accountEmails) ? accountEmails.filter((e): e is string => typeof e === "string" && e.trim().length > 0).map((e) => e.trim()) : undefined;
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
@@ -66,10 +72,12 @@ export async function POST(request: Request) {
 
     const { client } = ctx;
 
-    await client.applyRampForUnwarmedAccounts({ unwarmedDailyLimit: 15 });
+    await client.applyRampForUnwarmedAccounts({
+      unwarmedDailyLimit: 15,
+      ...(selectedEmails != null && selectedEmails.length > 0 && { accountEmails: selectedEmails }),
+    });
 
-    const defaultName = `Gather ${batch.name ?? batch.id.slice(0, 8)} ${new Date().toISOString().slice(0, 10)}`;
-    const baseName = campaignNameInput?.trim() || defaultName;
+    const baseName = campaignNameTrimmed;
 
     if (abTest) {
       // A/B: assign leads 50/50, create two campaigns, record with abGroupId
@@ -105,8 +113,9 @@ export async function POST(request: Request) {
 
       const nameA = `${baseName} (A)`;
       const nameB = `${baseName} (B)`;
-      const createdA = await client.createCampaign(nameA);
-      const createdB = await client.createCampaign(nameB);
+      const campaignOptions = selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : undefined;
+      const createdA = await client.createCampaign(nameA, campaignOptions);
+      const createdB = await client.createCampaign(nameB, campaignOptions);
       const idA = createdA.id;
       const idB = createdB.id;
       if (!idA || !idB) {
@@ -166,7 +175,8 @@ export async function POST(request: Request) {
 
     // Single campaign
     const campaignName = baseName;
-    const created = await client.createCampaign(campaignName);
+    const campaignOptions = selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : undefined;
+    const created = await client.createCampaign(campaignName, campaignOptions);
     const campaignId = created.id;
     if (!campaignId) {
       return NextResponse.json({ error: "Instantly did not return campaign id" }, { status: 500 });
