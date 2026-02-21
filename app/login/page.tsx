@@ -1,18 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { signIn } from "next-auth/react";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
-export default function LoginPage() {
+/** Only allow internal paths. Reject /login to avoid redirect loops. */
+function sanitizeCallbackUrl(callbackUrl: string | null): string {
+  if (!callbackUrl || typeof callbackUrl !== "string") return "/onboarding";
+  try {
+    const path = new URL(callbackUrl, "https://x").pathname;
+    if (path === "/login" || path.startsWith("/login?")) return "/onboarding";
+    if (path === "/signup" || path.startsWith("/signup")) return "/onboarding";
+    if (["/", "/onboarding", "/dashboard", "/verify-email-pending", "/admin"].some((p) => p === path || path.startsWith(p + "/"))) {
+      return path;
+    }
+  } catch {
+    // ignore invalid URLs
+  }
+  return "/onboarding";
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
+  const redirectTo = sanitizeCallbackUrl(callbackUrl);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  const { data: session, status } = useSession();
+
+  // If already signed in, leave immediately so we don't get stuck on this screen
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      router.replace(redirectTo);
+      router.refresh();
+    }
+  }, [status, session?.user, redirectTo, router]);
 
   useEffect(() => {
     fetch("/api/auth/providers")
@@ -37,9 +66,7 @@ export default function LoginPage() {
         setError("Invalid email or password");
         setLoading(false);
       } else {
-        // Check if email is verified and redirect accordingly
-        // If not verified, they'll be redirected by middleware
-        router.push("/onboarding");
+        router.replace(redirectTo);
         router.refresh();
       }
     } catch (err) {
@@ -114,7 +141,7 @@ export default function LoginPage() {
               </div>
               <button
                 type="button"
-                onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+                onClick={() => signIn("google", { callbackUrl: redirectTo })}
                 className="w-full rounded-md border border-zinc-600 bg-zinc-800 py-3 font-medium text-zinc-200 hover:bg-zinc-700"
               >
                 Continue with Google
@@ -130,5 +157,19 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center px-6">
+          <p className="text-zinc-400">Loading...</p>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
