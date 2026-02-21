@@ -44,10 +44,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid playbook. Generate and approve a playbook first." }, { status: 400 });
     }
 
-    const steps = playbook.steps.slice(0, 3); // up to 3 steps
+    const MAX_STEPS = 10;
+    const steps = playbook.steps.slice(0, MAX_STEPS);
     if (steps.length === 0) {
       return NextResponse.json({ error: "Playbook has no steps." }, { status: 400 });
     }
+    const stepKeys = steps.map((_, i) => `step${i + 1}`).join(", ");
+    const stepExample = steps.map((_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
 
     const anthropicKey = decrypt(workspace.anthropicKey);
     const productSummary = workspace.productSummary ?? "";
@@ -108,8 +111,8 @@ Lead:
 Templates (personalize each for this lead):
 ${templatesJson}
 
-Respond with ONLY a valid JSON object with keys step1, step2, step3 (only include steps that exist in the templates above). Each step: { "subject": "...", "body": "..." }
-Example: {"step1": {"subject": "...", "body": "..."}, "step2": {"subject": "...", "body": "..."}, "step3": {"subject": "...", "body": "..."}}`;
+Respond with ONLY a valid JSON object with keys ${stepKeys} (only include steps that exist in the templates above). Each step: { "subject": "...", "body": "..." }
+Example: {${stepExample}}`;
 
       try {
         const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400 });
@@ -118,18 +121,28 @@ Example: {"step1": {"subject": "...", "body": "..."}, "step2": {"subject": "..."
         if (codeBlock) jsonStr = codeBlock[1].trim();
         const parsed = JSON.parse(jsonStr) as Record<string, { subject?: string; body?: string }>;
 
-        const update: Record<string, string | null> = {};
-        if (steps[0]) {
-          update.step1Subject = (parsed.step1?.subject ?? steps[0].subject) || null;
-          update.step1Body = (parsed.step1?.body ?? steps[0].body) || null;
+        const stepsArray = steps.map((s, i) => {
+          const key = `step${i + 1}`;
+          const step = parsed[key];
+          return {
+            subject: (step?.subject ?? s.subject) || "",
+            body: (step?.body ?? s.body) || "",
+          };
+        });
+        const update: Record<string, string | null> = {
+          stepsJson: JSON.stringify(stepsArray),
+        };
+        if (stepsArray[0]) {
+          update.step1Subject = stepsArray[0].subject || null;
+          update.step1Body = stepsArray[0].body || null;
         }
-        if (steps[1]) {
-          update.step2Subject = (parsed.step2?.subject ?? steps[1].subject) || null;
-          update.step2Body = (parsed.step2?.body ?? steps[1].body) || null;
+        if (stepsArray[1]) {
+          update.step2Subject = stepsArray[1].subject || null;
+          update.step2Body = stepsArray[1].body || null;
         }
-        if (steps[2]) {
-          update.step3Subject = (parsed.step3?.subject ?? steps[2].subject) || null;
-          update.step3Body = (parsed.step3?.body ?? steps[2].body) || null;
+        if (stepsArray[2]) {
+          update.step3Subject = stepsArray[2].subject || null;
+          update.step3Body = stepsArray[2].body || null;
         }
 
         await prisma.lead.update({
@@ -138,19 +151,16 @@ Example: {"step1": {"subject": "...", "body": "..."}, "step2": {"subject": "..."
         });
       } catch (err) {
         console.error(`Lead ${lead.id} personalize error:`, err);
-        const fallback: Record<string, string | null> = {};
-        if (steps[0]) {
-          fallback.step1Subject = steps[0].subject;
-          fallback.step1Body = steps[0].body;
-        }
-        if (steps[1]) {
-          fallback.step2Subject = steps[1].subject;
-          fallback.step2Body = steps[1].body;
-        }
-        if (steps[2]) {
-          fallback.step3Subject = steps[2].subject;
-          fallback.step3Body = steps[2].body;
-        }
+        const fallbackSteps = steps.map((s) => ({ subject: s.subject, body: s.body }));
+        const fallback: Record<string, string | null> = {
+          stepsJson: JSON.stringify(fallbackSteps),
+          step1Subject: fallbackSteps[0]?.subject ?? null,
+          step1Body: fallbackSteps[0]?.body ?? null,
+          step2Subject: fallbackSteps[1]?.subject ?? null,
+          step2Body: fallbackSteps[1]?.body ?? null,
+          step3Subject: fallbackSteps[2]?.subject ?? null,
+          step3Body: fallbackSteps[2]?.body ?? null,
+        };
         await prisma.lead.update({
           where: { id: lead.id },
           data: fallback,
@@ -161,7 +171,7 @@ Example: {"step1": {"subject": "...", "body": "..."}, "step2": {"subject": "..."
     return NextResponse.json({
       done: true,
       count: batch.leads.length,
-      message: `Personalized ${batch.leads.length} emails.`,
+      message: `Personalized ${batch.leads.length} lead(s), ${steps.length} steps each.`,
     });
   } catch (error: any) {
     console.error("Leads generate error:", error);

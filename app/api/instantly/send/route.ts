@@ -85,25 +85,59 @@ export async function POST(request: Request) {
         .replace(/\r\n/g, "\n")
         .replace(/\n/g, "<br>\n");
 
-    // Build sequence steps as PLACEHOLDERS so each lead's full body/subject per step come from custom_variables
-    const stepPlaceholders = [
-      { subject: "{{step1_subject}}", body: "{{step1_body}}", delayDays: 0 },
-      { subject: "{{step2_subject}}", body: "{{step2_body}}", delayDays: 3 },
-      { subject: "{{step3_subject}}", body: "{{step3_body}}", delayDays: 5 },
+    // Playbook steps (dynamic N, max 10) — sequence uses placeholders filled per lead via custom_variables
+    const MAX_STEPS = 10;
+    let playbookSteps: Array<{ subject: string; body: string; delayDays: number }> = [
+      { subject: "", body: "", delayDays: 0 },
+      { subject: "", body: "", delayDays: 3 },
+      { subject: "", body: "", delayDays: 5 },
     ];
-    let sequenceSteps: Array<{ subject: string; body: string; delayDays: number }> = stepPlaceholders;
     try {
       const playbook = workspace.playbookJson ? (JSON.parse(workspace.playbookJson) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
       if (playbook?.steps?.length) {
-        sequenceSteps = playbook.steps.slice(0, 3).map((s, i) => ({
-          subject: `{{step${i + 1}_subject}}`,
-          body: `{{step${i + 1}_body}}`,
-          delayDays: typeof s.delayDays === "number" ? s.delayDays : stepPlaceholders[i]?.delayDays ?? 0,
+        playbookSteps = playbook.steps.slice(0, MAX_STEPS).map((s) => ({
+          subject: s.subject ?? "",
+          body: s.body ?? "",
+          delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
         }));
       }
     } catch {
-      // use stepPlaceholders as-is
+      // use default 3 steps
     }
+    const sequenceSteps = playbookSteps.map((s, i) => ({
+      subject: `{{step${i + 1}_subject}}`,
+      body: `{{step${i + 1}_body}}`,
+      delayDays: s.delayDays,
+    }));
+
+    // Get a lead's steps array (from stepsJson or legacy step1/2/3), padded to numSteps
+    type LeadWithSteps = typeof batch.leads[0] & { stepsJson?: string | null };
+    const getLeadSteps = (lead: LeadWithSteps, numSteps: number): Array<{ subject: string; body: string }> => {
+      let arr: Array<{ subject: string; body: string }>;
+      try {
+        if (lead.stepsJson) {
+          arr = JSON.parse(lead.stepsJson) as Array<{ subject?: string; body?: string }>;
+          if (!Array.isArray(arr)) arr = [];
+        } else {
+          arr = [];
+        }
+      } catch {
+        arr = [];
+      }
+      const legacy = [
+        { subject: lead.step1Subject ?? "", body: lead.step1Body ?? "" },
+        { subject: lead.step2Subject ?? "", body: lead.step2Body ?? "" },
+        { subject: lead.step3Subject ?? "", body: lead.step3Body ?? "" },
+      ];
+      const steps: Array<{ subject: string; body: string }> = [];
+      for (let i = 0; i < numSteps; i++) {
+        const s = arr[i] ?? legacy[i] ?? { subject: "", body: "" };
+        steps.push({ subject: s.subject ?? "", body: s.body ?? "" });
+      }
+      return steps;
+    };
+
+    const numSteps = sequenceSteps.length;
 
     const campaignOptionsWithSequence = {
       ...(selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : {}),
@@ -133,21 +167,22 @@ export async function POST(request: Request) {
         list: typeof batch.leads,
         subjectLineOverride: string
       ) =>
-        list.map((l) => ({
-          email: l.email,
-          first_name: l.name?.split(/\s+/)[0] ?? null,
-          last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
-          company_name: l.company ?? null,
-          personalization: bodyWithLineBreaks(l.step1Body ?? "").trim() || undefined,
-          custom_variables: {
-            step1_subject: subjectLineOverride,
-            step1_body: bodyWithLineBreaks(l.step1Body ?? "").trim(),
-            step2_subject: l.step2Subject ?? "",
-            step2_body: bodyWithLineBreaks(l.step2Body ?? "").trim(),
-            step3_subject: l.step3Subject ?? "",
-            step3_body: bodyWithLineBreaks(l.step3Body ?? "").trim(),
-          },
-        }));
+        list.map((l) => {
+          const steps = getLeadSteps(l, numSteps);
+          const custom_variables: Record<string, string> = {};
+          steps.forEach((s, i) => {
+            custom_variables[`step${i + 1}_subject`] = i === 0 ? subjectLineOverride : (s.subject ?? "");
+            custom_variables[`step${i + 1}_body`] = bodyWithLineBreaks(s.body ?? "").trim();
+          });
+          return {
+            email: l.email,
+            first_name: l.name?.split(/\s+/)[0] ?? null,
+            last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
+            company_name: l.company ?? null,
+            personalization: bodyWithLineBreaks(steps[0]?.body ?? "").trim() || undefined,
+            custom_variables,
+          };
+        });
 
       const nameA = `${baseName} (A)`;
       const nameB = `${baseName} (B)`;
@@ -216,21 +251,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Instantly did not return campaign id" }, { status: 500 });
     }
 
-    const leadsPayload = batch.leads.map((l) => ({
-      email: l.email,
-      first_name: l.name?.split(/\s+/)[0] ?? null,
-      last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
-      company_name: l.company ?? null,
-      personalization: bodyWithLineBreaks(l.step1Body ?? "").trim() || undefined,
-      custom_variables: {
-        step1_subject: l.step1Subject ?? "",
-        step1_body: bodyWithLineBreaks(l.step1Body ?? "").trim(),
-        step2_subject: l.step2Subject ?? "",
-        step2_body: bodyWithLineBreaks(l.step2Body ?? "").trim(),
-        step3_subject: l.step3Subject ?? "",
-        step3_body: bodyWithLineBreaks(l.step3Body ?? "").trim(),
-      },
-    }));
+    const leadsPayload = batch.leads.map((l) => {
+      const steps = getLeadSteps(l, numSteps);
+      const custom_variables: Record<string, string> = {};
+      steps.forEach((s, i) => {
+        custom_variables[`step${i + 1}_subject`] = s.subject ?? "";
+        custom_variables[`step${i + 1}_body`] = bodyWithLineBreaks(s.body ?? "").trim();
+      });
+      return {
+        email: l.email,
+        first_name: l.name?.split(/\s+/)[0] ?? null,
+        last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
+        company_name: l.company ?? null,
+        personalization: bodyWithLineBreaks(steps[0]?.body ?? "").trim() || undefined,
+        custom_variables,
+      };
+    });
 
     const addResult = await client.bulkAddLeadsToCampaign(campaignId, leadsPayload, {
       verify_leads_on_import: false,
