@@ -79,6 +79,26 @@ export async function POST(request: Request) {
 
     const baseName = campaignNameTrimmed;
 
+    // Build sequence steps from approved playbook so the campaign has email steps in Instantly
+    let sequenceSteps: Array<{ subject: string; body: string; delayDays: number }> = [];
+    try {
+      const playbook = workspace.playbookJson ? (JSON.parse(workspace.playbookJson) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
+      if (playbook?.steps?.length) {
+        sequenceSteps = playbook.steps.slice(0, 3).map((s) => ({
+          subject: s.subject ?? "Follow up",
+          body: s.body ?? "",
+          delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
+        }));
+      }
+    } catch {
+      // ignore; campaign will be created without sequence steps
+    }
+
+    const campaignOptionsWithSequence = {
+      ...(selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : {}),
+      ...(sequenceSteps.length > 0 ? { sequenceSteps } : {}),
+    };
+
     if (abTest) {
       // A/B: assign leads 50/50, create two campaigns, record with abGroupId
       const abGroupId = `ab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -113,9 +133,8 @@ export async function POST(request: Request) {
 
       const nameA = `${baseName} (A)`;
       const nameB = `${baseName} (B)`;
-      const campaignOptions = selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : undefined;
-      const createdA = await client.createCampaign(nameA, campaignOptions);
-      const createdB = await client.createCampaign(nameB, campaignOptions);
+      const createdA = await client.createCampaign(nameA, campaignOptionsWithSequence);
+      const createdB = await client.createCampaign(nameB, campaignOptionsWithSequence);
       const idA = createdA.id;
       const idB = createdB.id;
       if (!idA || !idB) {
@@ -173,8 +192,7 @@ export async function POST(request: Request) {
 
     // Single campaign
     const campaignName = baseName;
-    const campaignOptions = selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : undefined;
-    const created = await client.createCampaign(campaignName, campaignOptions);
+    const created = await client.createCampaign(campaignName, campaignOptionsWithSequence);
     const campaignId = created.id;
     if (!campaignId) {
       return NextResponse.json({ error: "Instantly did not return campaign id" }, { status: 500 });

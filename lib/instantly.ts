@@ -232,6 +232,8 @@ function createInstantlyClient(apiKey: string) {
         };
         /** Account emails to use for sending. If provided, only these accounts are used; otherwise all workspace accounts. */
         email_list?: string[];
+        /** Sequence steps (subject, body, delay in days). If provided, campaign will have this email sequence in the Sequences tab. */
+        sequenceSteps?: Array<{ subject: string; body: string; delayDays: number }>;
       }
     ): Promise<{ id: string }> {
       const schedule = options?.schedule;
@@ -249,12 +251,28 @@ function createInstantlyClient(apiKey: string) {
           },
         ],
       };
-      const body: { name: string; campaign_schedule: typeof campaign_schedule; email_list?: string[] } = {
+      const body: {
+        name: string;
+        campaign_schedule: typeof campaign_schedule;
+        email_list?: string[];
+        sequences?: Array<{ steps: Array<{ subject: string; body: string; wait_days: number }> }>;
+      } = {
         name,
         campaign_schedule,
       };
       if (options?.email_list != null && options.email_list.length > 0) {
         body.email_list = options.email_list;
+      }
+      if (options?.sequenceSteps != null && options.sequenceSteps.length > 0) {
+        body.sequences = [
+          {
+            steps: options.sequenceSteps.map((s) => ({
+              subject: s.subject,
+              body: s.body,
+              wait_days: s.delayDays,
+            })),
+          },
+        ];
       }
       const data = await request<{ id?: string }>("POST", "/campaigns", body);
       const id =
