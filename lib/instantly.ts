@@ -255,7 +255,7 @@ function createInstantlyClient(apiKey: string) {
         name: string;
         campaign_schedule: typeof campaign_schedule;
         email_list?: string[];
-        sequences?: Array<{ steps: Array<{ type: string; subject: string; body: string; delay: number; wait_days?: number }> }>;
+        sequences?: Array<{ steps: Array<{ type: string; delay: number; variants: Array<{ subject: string; body: string }> }> }>;
       } = {
         name,
         campaign_schedule,
@@ -268,10 +268,8 @@ function createInstantlyClient(apiKey: string) {
           {
             steps: options.sequenceSteps.map((s) => ({
               type: "email",
-              subject: s.subject,
-              body: s.body,
               delay: s.delayDays,
-              wait_days: s.delayDays,
+              variants: [{ subject: s.subject, body: s.body }],
             })),
           },
         ];
