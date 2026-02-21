@@ -276,7 +276,7 @@ function createInstantlyClient(apiKey: string) {
         personalization?: string | null;
         custom_variables?: Record<string, string>;
       }>,
-      options?: { skip_if_in_workspace?: boolean; verify_leads_on_import?: boolean }
+      options?: { skip_if_in_workspace?: boolean; skip_if_in_campaign?: boolean; verify_leads_on_import?: boolean }
     ): Promise<{ leads_uploaded: number; duplicated_leads: number; in_blocklist: number }> {
       const chunkSize = 1000;
       let totalUploaded = 0;
@@ -294,7 +294,9 @@ function createInstantlyClient(apiKey: string) {
             personalization: l.personalization ?? undefined,
             custom_variables: l.custom_variables ?? undefined,
           })),
-          skip_if_in_workspace: options?.skip_if_in_workspace ?? true,
+          // Don't skip leads that exist elsewhere — add them to this campaign (so "Send to Instantly" actually populates the campaign)
+          skip_if_in_workspace: options?.skip_if_in_workspace ?? false,
+          skip_if_in_campaign: options?.skip_if_in_campaign ?? false,
           verify_leads_on_import: options?.verify_leads_on_import ?? false,
         };
         const res = await request<{

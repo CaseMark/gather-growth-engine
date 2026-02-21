@@ -124,11 +124,9 @@ export async function POST(request: Request) {
 
       const [resA, resB] = await Promise.all([
         client.bulkAddLeadsToCampaign(idA, toPayload(leadsA, subjectLineA!.trim()), {
-          skip_if_in_workspace: true,
           verify_leads_on_import: false,
         }),
         client.bulkAddLeadsToCampaign(idB, toPayload(leadsB, subjectLineB!.trim()), {
-          skip_if_in_workspace: true,
           verify_leads_on_import: false,
         }),
       ]);
@@ -192,7 +190,6 @@ export async function POST(request: Request) {
     }));
 
     const addResult = await client.bulkAddLeadsToCampaign(campaignId, leadsPayload, {
-      skip_if_in_workspace: true,
       verify_leads_on_import: false,
     });
 
