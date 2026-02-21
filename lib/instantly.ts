@@ -222,7 +222,8 @@ function createInstantlyClient(apiKey: string) {
       const from = schedule?.from ?? "09:00";
       const to = schedule?.to ?? "17:00";
       const days = schedule?.days ?? [true, true, true, true, true, false, false]; // Mon-Fri
-      const timezone = schedule?.timezone ?? "America/New_York";
+      // Instantly API only accepts specific timezone values from their enum (e.g. America/Chicago, Etc/GMT+12)
+      const timezone = schedule?.timezone ?? "America/Chicago";
       const campaign_schedule = {
         schedules: [
           {
