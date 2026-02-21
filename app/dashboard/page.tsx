@@ -52,7 +52,13 @@ export default function DashboardPage() {
   const [deleteBatchLoading, setDeleteBatchLoading] = useState(false);
   const [leadsError, setLeadsError] = useState("");
   const [sendingToInstantly, setSendingToInstantly] = useState(false);
-  const [sendToInstantlyResult, setSendToInstantlyResult] = useState<{ campaignName?: string; leads_uploaded?: number; message?: string } | null>(null);
+  const [sendToInstantlyResult, setSendToInstantlyResult] = useState<{
+    campaignName?: string;
+    leads_uploaded?: number;
+    duplicated_leads?: number;
+    in_blocklist?: number;
+    message?: string;
+  } | null>(null);
   const [campaignNameInput, setCampaignNameInput] = useState("");
   /** null = all accounts selected, [] = none, string[] = only these. */
   const [selectedAccountEmails, setSelectedAccountEmails] = useState<string[] | null>(null);
@@ -728,6 +734,8 @@ export default function DashboardPage() {
       setSendToInstantlyResult({
         campaignName: data.campaignName,
         leads_uploaded: data.leads_uploaded,
+        duplicated_leads: data.duplicated_leads,
+        in_blocklist: data.in_blocklist,
         message: data.message,
       });
       fetch("/api/instantly/sent-campaigns")
@@ -1435,9 +1443,27 @@ export default function DashboardPage() {
                 {sendToInstantlyResult && (
                   <div className="mt-3 rounded-md bg-emerald-900/20 border border-emerald-800 px-3 py-2 text-sm text-emerald-300">
                     {sendToInstantlyResult.message}
-                    {sendToInstantlyResult.leads_uploaded != null && (
-                      <span className="block mt-1 text-emerald-400/90">Leads uploaded: {sendToInstantlyResult.leads_uploaded}</span>
-                    )}
+                    <div className="mt-1.5 space-y-0.5 text-emerald-400/90">
+                      {sendToInstantlyResult.leads_uploaded != null && (
+                        <span className="block">Leads uploaded: {sendToInstantlyResult.leads_uploaded}</span>
+                      )}
+                      {(sendToInstantlyResult.duplicated_leads ?? 0) > 0 && (
+                        <span className="block text-amber-400/90">
+                          {sendToInstantlyResult.duplicated_leads} duplicate(s) — already in Instantly, so not re-added. Emails still send if they were in a previous run.
+                        </span>
+                      )}
+                      {(sendToInstantlyResult.in_blocklist ?? 0) > 0 && (
+                        <span className="block text-amber-400/90">{sendToInstantlyResult.in_blocklist} in blocklist (skipped).</span>
+                      )}
+                      {sendToInstantlyResult.leads_uploaded === 0 &&
+                        (sendToInstantlyResult.duplicated_leads ?? 0) === 0 &&
+                        (sendToInstantlyResult.in_blocklist ?? 0) === 0 && (
+                          <span className="block text-amber-400/90">Leads may already be in this campaign or workspace in Instantly; check the campaign there.</span>
+                        )}
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      See what&apos;s sent: scroll to <strong>Campaign performance</strong> below and select this campaign, or open the Instantly app. Unwarmed inboxes send slowly (15/day); first email can take hours.
+                    </p>
                   </div>
                 )}
                 {leadsError && (
