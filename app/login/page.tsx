@@ -12,6 +12,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
   const redirectTo = sanitizeCallbackUrl(callbackUrl);
+  const errorParam = searchParams.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,7 +21,15 @@ function LoginForm() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const { data: session, status } = useSession();
 
-  // If already signed in, leave immediately so we don't get stuck on this screen (full-page redirect so cookie is sent)
+  // Show NextAuth error from URL (e.g. after redirect: true and credentials fail)
+  useEffect(() => {
+    if (errorParam === "CredentialsSignin" || errorParam === "Callback" || errorParam === "CallbackRouteError") {
+      setError("Invalid email or password");
+      setLoading(false);
+    }
+  }, [errorParam]);
+
+  // If already signed in, leave immediately (full-page redirect so cookie is sent)
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       window.location.replace(redirectTo);
@@ -41,19 +50,16 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
+      // Use redirect: true so NextAuth sets the session cookie in the same response as the redirect.
+      // With redirect: false, the cookie wasn't visible to middleware on the next request, causing a loop.
+      await signIn("credentials", {
         email,
         password,
-        redirect: false,
+        callbackUrl: redirectTo,
+        redirect: true,
       });
-
-      if (result?.error) {
-        setError("Invalid email or password");
-        setLoading(false);
-      } else {
-        // Full-page redirect so the session cookie is sent on the next request (avoids getting stuck on login)
-        window.location.replace(redirectTo);
-      }
+      // If we get here, redirect didn't happen (e.g. credentials failed). NextAuth may have redirected back with ?error=
+      setLoading(false);
     } catch (err) {
       setError("Something went wrong. Please try again.");
       setLoading(false);
