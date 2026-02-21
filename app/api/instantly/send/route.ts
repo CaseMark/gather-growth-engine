@@ -85,19 +85,24 @@ export async function POST(request: Request) {
         .replace(/\r\n/g, "\n")
         .replace(/\n/g, "<br>\n");
 
-    // Build sequence steps from approved playbook so the campaign has email steps in Instantly
-    let sequenceSteps: Array<{ subject: string; body: string; delayDays: number }> = [];
+    // Build sequence steps as PLACEHOLDERS so each lead's full body/subject per step come from custom_variables
+    const stepPlaceholders = [
+      { subject: "{{step1_subject}}", body: "{{step1_body}}", delayDays: 0 },
+      { subject: "{{step2_subject}}", body: "{{step2_body}}", delayDays: 3 },
+      { subject: "{{step3_subject}}", body: "{{step3_body}}", delayDays: 5 },
+    ];
+    let sequenceSteps: Array<{ subject: string; body: string; delayDays: number }> = stepPlaceholders;
     try {
       const playbook = workspace.playbookJson ? (JSON.parse(workspace.playbookJson) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
       if (playbook?.steps?.length) {
-        sequenceSteps = playbook.steps.slice(0, 3).map((s) => ({
-          subject: s.subject ?? "Follow up",
-          body: bodyWithLineBreaks(s.body ?? ""),
-          delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
+        sequenceSteps = playbook.steps.slice(0, 3).map((s, i) => ({
+          subject: `{{step${i + 1}_subject}}`,
+          body: `{{step${i + 1}_body}}`,
+          delayDays: typeof s.delayDays === "number" ? s.delayDays : stepPlaceholders[i]?.delayDays ?? 0,
         }));
       }
     } catch {
-      // ignore; campaign will be created without sequence steps
+      // use stepPlaceholders as-is
     }
 
     const campaignOptionsWithSequence = {
@@ -126,7 +131,7 @@ export async function POST(request: Request) {
 
       const toPayload = (
         list: typeof batch.leads,
-        subject: string
+        subjectLineOverride: string
       ) =>
         list.map((l) => ({
           email: l.email,
@@ -134,7 +139,14 @@ export async function POST(request: Request) {
           last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
           company_name: l.company ?? null,
           personalization: bodyWithLineBreaks(l.step1Body ?? "").trim() || undefined,
-          custom_variables: { subject_line: subject },
+          custom_variables: {
+            step1_subject: subjectLineOverride,
+            step1_body: bodyWithLineBreaks(l.step1Body ?? "").trim(),
+            step2_subject: l.step2Subject ?? "",
+            step2_body: bodyWithLineBreaks(l.step2Body ?? "").trim(),
+            step3_subject: l.step3Subject ?? "",
+            step3_body: bodyWithLineBreaks(l.step3Body ?? "").trim(),
+          },
         }));
 
       const nameA = `${baseName} (A)`;
@@ -210,7 +222,14 @@ export async function POST(request: Request) {
       last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
       company_name: l.company ?? null,
       personalization: bodyWithLineBreaks(l.step1Body ?? "").trim() || undefined,
-      custom_variables: l.step1Subject ? { subject_line: l.step1Subject } : undefined,
+      custom_variables: {
+        step1_subject: l.step1Subject ?? "",
+        step1_body: bodyWithLineBreaks(l.step1Body ?? "").trim(),
+        step2_subject: l.step2Subject ?? "",
+        step2_body: bodyWithLineBreaks(l.step2Body ?? "").trim(),
+        step3_subject: l.step3Subject ?? "",
+        step3_body: bodyWithLineBreaks(l.step3Body ?? "").trim(),
+      },
     }));
 
     const addResult = await client.bulkAddLeadsToCampaign(campaignId, leadsPayload, {
