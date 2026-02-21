@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Gather Growth Engine",
+  title: "Outbound Growth Engine",
   description: "Automated outbound engine that does what SDRs do.",
 };
 

@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-zinc-800 bg-zinc-900/80 shadow-sm;
+  }
+  .card-accent {
+    @apply rounded-2xl border border-zinc-700 bg-zinc-800 text-zinc-100 shadow-md;
+  }
+  .card-label {
+    @apply text-xs font-medium uppercase tracking-wider text-zinc-500;
+  }
+}

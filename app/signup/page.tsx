@@ -42,10 +42,16 @@ export default function SignupPage() {
       });
 
       if (result?.error) {
-        setError("Account created but login failed. Please log in manually.");
+        // Account created but auto-login failed
+        // Show success message with email verification prompt
+        setError("");
         setLoading(false);
+        alert("Account created! Please check your email to verify your account, then log in.");
+        router.push("/login");
       } else {
-        router.push("/dashboard");
+        // Account created and auto-logged in
+        // Redirect to email verification page
+        router.push("/verify-email-pending");
         router.refresh();
       }
     } catch (err) {
@@ -59,7 +65,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
           <Link href="/" className="text-lg font-semibold text-zinc-100">
-            Gather Growth Engine
+            Outbound Growth Engine
           </Link>
           <h2 className="mt-6 text-2xl font-semibold">Sign up</h2>
         </div>
@@ -123,6 +129,25 @@ export default function SignupPage() {
           >
             {loading ? "Creating account..." : "Create account"}
           </button>
+          {process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" && (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-zinc-700" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-zinc-950 px-2 text-zinc-500">or</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+                className="w-full rounded-md border border-zinc-600 bg-zinc-800 py-3 font-medium text-zinc-200 hover:bg-zinc-700"
+              >
+                Continue with Google
+              </button>
+            </>
+          )}
         </form>
         <p className="text-center text-sm text-zinc-400">
           Already have an account?{" "}

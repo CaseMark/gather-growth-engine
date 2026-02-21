@@ -9,12 +9,31 @@ Automated outbound engine that does what SDRs do: understand your product, build
 
 - **Next.js 14** (App Router), TypeScript
 - **Tailwind CSS** for UI
-- **NextAuth.js** with email/password (Credentials provider)
+- **NextAuth.js** with email/password (Credentials) and optional **Google OAuth**
 - **Prisma** + **SQLite** (dev) — migrate to Postgres for production
 - **Agent:** Anthropic (users provide their own API keys)
 - **Sending:** Instantly (users provide their own API keys)
+- **A/B testing:** Subject-line (or copy) variants with 50/50 split and comparison UI
 
 **Cost model:** Users bring their own API keys. Project owner pays $0. See [docs/SPEC.md](docs/SPEC.md) §1 and §4.
+
+## Environment variables
+
+Create `.env` from `.env.example` and set:
+
+| Variable | Required | Description |
+|---------|----------|-------------|
+| `DATABASE_URL` | Yes | SQLite: `file:./dev.db`; production: Postgres URL |
+| `NEXTAUTH_SECRET` | Yes | Generate with `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | Yes (prod) | Full app URL, e.g. `https://growth.gatherhq.com` |
+| `ENCRYPTION_KEY` | Recommended | 32+ char key for encrypting API keys (default dev key not for prod) |
+| `GOOGLE_CLIENT_ID` | Optional | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth client secret |
+| `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED` | Optional | Set to `"true"` to show "Continue with Google" on login/signup |
+| `RESEND_API_KEY` | Optional | For verification emails (Resend); omit to skip sending |
+| `RESEND_FROM_EMAIL` | Optional | From address for verification emails |
+
+User API keys (Anthropic, Instantly) are stored encrypted per workspace after onboarding.
 
 ## Run locally
 
@@ -27,20 +46,30 @@ Automated outbound engine that does what SDRs do: understand your product, build
    ```bash
    cp .env.example .env
    ```
-   Then edit `.env` and set `NEXTAUTH_SECRET` (generate one with `openssl rand -base64 32`).
+   Edit `.env` and set at least `NEXTAUTH_SECRET` and `DATABASE_URL` (e.g. `file:./dev.db`).
 
 3. **Set up database:**
    ```bash
    npx prisma generate
-   npx prisma migrate dev --name init
+   npx prisma db push
    ```
+   (Use `npx prisma migrate dev` when using migrations.)
 
 4. **Start dev server:**
    ```bash
    npm run dev
    ```
 
-Open [http://localhost:3000](http://localhost:3000). You can **Sign up** to create an account, then **Log in** to access the dashboard. The onboarding flow (domain + API keys) is next.
+Open [http://localhost:3000](http://localhost:3000). Sign up or log in (or use **Continue with Google** if OAuth is configured), then complete onboarding (domain + API keys) to use the dashboard.
+
+## Tests
+
+```bash
+npm install -D jest @types/jest
+npm test
+```
+
+Tests cover API route validation (e.g. unauthenticated send returns 401, missing `batchId` returns 400, signup validation). Add more in `__tests__/`.
 
 ## Project layout
 
@@ -68,8 +97,11 @@ See [DEPLOY.md](DEPLOY.md) for detailed instructions on deploying to **Vercel** 
 **Quick start:**
 1. Push to GitHub (see DEPLOY.md)
 2. Import repo on Vercel/Railway
-3. Add environment variables (DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET)
-4. Deploy!
+3. Add environment variables: `DATABASE_URL` (Postgres in prod), `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and optionally `ENCRYPTION_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=true`, `RESEND_*`
+4. Run database migrations: `npx prisma migrate deploy`
+5. Deploy
+
+**Build:** `npm run build` produces a production build. Minification is currently disabled in `next.config.js` to avoid a Terser unicode error; you can re-enable it once the offending dependency or character is fixed.
 
 ## What's next
 

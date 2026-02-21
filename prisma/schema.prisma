@@ -42,10 +42,12 @@ model User {
   name          String?
   email         String    @unique
   emailVerified DateTime?
+  emailVerificationToken String? @unique
   password      String?   // hashed with bcrypt
   image         String?
   accounts      Account[]
   sessions      Session[]
+  workspace     Workspace?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -56,4 +58,93 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model Workspace {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  domain          String?  // e.g. "acme.com"
+  anthropicKey    String?  // encrypted
+  instantlyKey    String?  // encrypted
+  productSummary  String?  // populated after crawl
+  icp             String?  // Ideal Customer Profile (free text)
+  proofPointsJson String?  // JSON: [{ title?: string; text: string }]
+  playbookJson    String?  // JSON: { steps: [{ subject, body, delayDays }] }
+  playbookApproved Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadBatches    LeadBatch[]
+  sentCampaigns SentCampaign[]
+  performanceObservations PerformanceObservation[]
+}
+
+model PerformanceObservation {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  dimensionType  String   // "persona" | "vertical"
+  dimensionValue String   // e.g. "VP Sales", "SaaS"
+  metric         String   // "open_rate_pct" | "click_rate_pct" | "reply_count" | "positive_reply_count" | "objection_count" | "ooo_count" | "not_interested_count"
+  value          Float    // rate (0-100) or count
+  sourceType     String   // "campaign" | "reply"
+  sourceId       String   // sentCampaignId or campaignReplyId
+  createdAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model SentCampaign {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  leadBatchId          String?
+  instantlyCampaignId  String   // Instantly API campaign id
+  name                 String   // campaign name in Instantly
+  abGroupId            String?  // when set, this campaign is part of an A/B test group
+  variant              String?  // "A" | "B" when part of A/B test
+  createdAt            DateTime @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  replies              CampaignReply[]
+}
+
+model CampaignReply {
+  id             String   @id @default(cuid())
+  sentCampaignId String
+  fromEmail      String
+  subject        String?
+  bodySnippet    String?  // first ~500 chars for display
+  classification String?  // positive | objection | ooo | not_interested | other
+  createdAt      DateTime @default(now())
+
+  sentCampaign SentCampaign @relation(fields: [sentCampaignId], references: [id], onDelete: Cascade)
+}
+
+model LeadBatch {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String?  // optional label
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+}
+
+model Lead {
+  id                 String    @id @default(cuid())
+  leadBatchId        String
+  email              String
+  name               String?
+  jobTitle           String?
+  company            String?
+  industry           String?
+  emailVerified      Boolean?  // true/false after verify step; null = not checked
+  persona            String?   // from classify (e.g. "VP Sales")
+  vertical           String?   // from classify (e.g. "SaaS")
+  step1Subject       String?   // personalized first email subject
+  step1Body          String?   // personalized first email body
+  abVariant          String?   // "A" | "B" when sent as part of A/B test
+  createdAt          DateTime  @default(now())
+
+  leadBatch LeadBatch @relation(fields: [leadBatchId], references: [id], onDelete: Cascade)
 }
