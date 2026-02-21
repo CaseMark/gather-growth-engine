@@ -9,5 +9,5 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/verify-email-pending"],
+  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/verify-email-pending", "/admin"],
 };

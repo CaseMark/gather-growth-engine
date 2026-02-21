@@ -29,7 +29,7 @@ Create `.env` from `.env.example` and set:
 | `ENCRYPTION_KEY` | Recommended | 32+ char key for encrypting API keys (default dev key not for prod) |
 | `GOOGLE_CLIENT_ID` | Optional | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth client secret |
-| `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED` | Optional | Set to `"true"` to show "Continue with Google" on login/signup |
+| `ADMIN_EMAILS` | Optional | Comma-separated emails that can access `/admin` analytics |
 | `RESEND_API_KEY` | Optional | For verification emails (Resend); omit to skip sending |
 | `RESEND_FROM_EMAIL` | Optional | From address for verification emails |
 
@@ -70,6 +70,10 @@ npm test
 ```
 
 Tests cover API route validation (e.g. unauthenticated send returns 401, missing `batchId` returns 400, signup validation). Add more in `__tests__/`.
+
+## Admin analytics
+
+If you set `ADMIN_EMAILS` (comma-separated list of emails) in your environment, those users can open **`/admin`** after logging in to see product analytics: total users, signups (7d / 30d), campaigns sent, total leads, workspaces with domain, and tables of recent signups and recent campaigns.
 
 ## Project layout
 
