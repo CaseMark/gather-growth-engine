@@ -255,7 +255,7 @@ function createInstantlyClient(apiKey: string) {
         name: string;
         campaign_schedule: typeof campaign_schedule;
         email_list?: string[];
-        sequences?: Array<{ steps: Array<{ type: string; subject: string; body: string; wait_days: number }> }>;
+        sequences?: Array<{ steps: Array<{ type: string; subject: string; body: string; delay: number; wait_days?: number }> }>;
       } = {
         name,
         campaign_schedule,
@@ -270,6 +270,7 @@ function createInstantlyClient(apiKey: string) {
               type: "email",
               subject: s.subject,
               body: s.body,
+              delay: s.delayDays,
               wait_days: s.delayDays,
             })),
           },

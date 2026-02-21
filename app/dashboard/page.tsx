@@ -212,7 +212,8 @@ export default function DashboardPage() {
   }, [session?.user?.id, playbookData.playbookApproved]);
 
   useEffect(() => {
-    if (!selectedSentCampaignId) {
+    const campaignId = selectedSentCampaignId?.trim();
+    if (!campaignId) {
       setCampaignAnalytics(null);
       setAbPartnerAnalytics(null);
       setCampaignReplies([]);
@@ -229,12 +230,12 @@ export default function DashboardPage() {
     setAnalyticsLoading(true);
     setCampaignAnalytics(null);
     setAbPartnerAnalytics(null);
-    const selected = sentCampaigns.find((c) => c.id === selectedSentCampaignId);
+    const selected = sentCampaigns.find((c) => c.id === campaignId);
     const partner = selected?.abGroupId
-      ? sentCampaigns.find((c) => c.id !== selectedSentCampaignId && c.abGroupId === selected.abGroupId)
+      ? sentCampaigns.find((c) => c.id !== campaignId && c.abGroupId === selected.abGroupId)
       : null;
 
-    fetch(`/api/instantly/sent-campaigns/${selectedSentCampaignId}/analytics`)
+    fetch(`/api/instantly/sent-campaigns/${campaignId}/analytics`)
       .then((res) => res.json().then((data) => ({ res, data })))
       .then(({ res, data }) => {
         if (res.ok && !data.error) setCampaignAnalytics(data);
@@ -254,7 +255,7 @@ export default function DashboardPage() {
     }
 
     setRepliesLoading(true);
-    fetch(`/api/instantly/sent-campaigns/${selectedSentCampaignId}/replies`)
+    fetch(`/api/instantly/sent-campaigns/${campaignId}/replies`)
       .then((res) => res.json())
       .then((data) => setCampaignReplies(data.replies ?? []))
       .catch(() => setCampaignReplies([]))
@@ -1614,6 +1615,9 @@ export default function DashboardPage() {
                         </div>
                         {campaignAnalytics.suggestion && (
                           <p className="mt-3 text-amber-400/90 text-xs">{campaignAnalytics.suggestion}</p>
+                        )}
+                        {(campaignAnalytics as { noData?: boolean })?.noData && (
+                          <p className="mt-3 text-zinc-500 text-xs">Campaign may still be syncing in Instantly. Check back in a few minutes.</p>
                         )}
                       </div>
                     ) : selectedSentCampaignId ? (

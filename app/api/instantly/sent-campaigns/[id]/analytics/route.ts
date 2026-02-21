@@ -47,10 +47,19 @@ export async function GET(
 
     const analytics = await ctx.client.getCampaignAnalytics(sent.instantlyCampaignId);
     if (!analytics) {
-      return NextResponse.json(
-        { error: "No analytics yet (campaign may still be syncing)" },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        noData: true,
+        campaign_id: sent.instantlyCampaignId,
+        emails_sent_count: 0,
+        open_count: 0,
+        link_click_count: 0,
+        open_rate_pct: 0,
+        click_rate_pct: 0,
+        reply_count: 0,
+        bounced_count: 0,
+        contacted_count: 0,
+        leads_count: 0,
+      });
     }
 
     const sentCount = analytics.emails_sent_count ?? 0;
