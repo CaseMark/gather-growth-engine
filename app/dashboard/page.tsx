@@ -54,8 +54,8 @@ export default function DashboardPage() {
   const [sendingToInstantly, setSendingToInstantly] = useState(false);
   const [sendToInstantlyResult, setSendToInstantlyResult] = useState<{ campaignName?: string; leads_uploaded?: number; message?: string } | null>(null);
   const [campaignNameInput, setCampaignNameInput] = useState("");
-  /** Selected Instantly account emails to send from. Empty array = use all accounts. */
-  const [selectedAccountEmails, setSelectedAccountEmails] = useState<string[]>([]);
+  /** null = all accounts selected, [] = none, string[] = only these. */
+  const [selectedAccountEmails, setSelectedAccountEmails] = useState<string[] | null>(null);
   const [abTestEnabled, setAbTestEnabled] = useState(false);
   const [subjectLineA, setSubjectLineA] = useState("");
   const [subjectLineB, setSubjectLineB] = useState("");
@@ -692,6 +692,10 @@ export default function DashboardPage() {
       setLeadsError("Enter a campaign name.");
       return;
     }
+    if (Array.isArray(selectedAccountEmails) && selectedAccountEmails.length === 0) {
+      setLeadsError("Select at least one account to send from.");
+      return;
+    }
     if (abTestEnabled && (!subjectLineA.trim() || !subjectLineB.trim())) {
       setLeadsError("A/B test requires both Subject A and Subject B.");
       return;
@@ -709,7 +713,7 @@ export default function DashboardPage() {
         body.subjectLineA = subjectLineA.trim();
         body.subjectLineB = subjectLineB.trim();
       }
-      if (selectedAccountEmails.length > 0) body.accountEmails = selectedAccountEmails;
+      if (Array.isArray(selectedAccountEmails) && selectedAccountEmails.length > 0) body.accountEmails = selectedAccountEmails;
       const res = await fetch("/api/instantly/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1298,7 +1302,7 @@ export default function DashboardPage() {
                     </button>
                     <button
                       onClick={handleSendToInstantly}
-                      disabled={sendingToInstantly || !selectedBatchId || leads.length === 0 || !campaignNameInput.trim()}
+                      disabled={sendingToInstantly || !selectedBatchId || leads.length === 0 || !campaignNameInput.trim() || (Array.isArray(selectedAccountEmails) && selectedAccountEmails.length === 0)}
                       className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
                       title="Create Instantly campaign, add leads, apply slow ramp for unwarmed mailboxes, and activate"
                     >
@@ -1311,33 +1315,60 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span className="text-sm text-zinc-400">Accounts to send from:</span>
-                        {selectedAccountEmails.length > 0 ? (
+                        {selectedAccountEmails === null ? (
                           <>
-                            <span className="text-xs text-zinc-500">{selectedAccountEmails.length} of {instantlyAccounts.length} selected</span>
+                            <span className="text-xs text-zinc-500">All ({instantlyAccounts.length}) accounts</span>
                             <button
                               type="button"
                               onClick={() => setSelectedAccountEmails([])}
                               className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
                             >
+                              Unselect all
+                            </button>
+                          </>
+                        ) : selectedAccountEmails.length > 0 ? (
+                          <>
+                            <span className="text-xs text-zinc-500">{selectedAccountEmails.length} of {instantlyAccounts.length} selected</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccountEmails(null)}
+                              className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                            >
                               Use all accounts
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccountEmails([])}
+                              className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                            >
+                              Unselect all
                             </button>
                           </>
                         ) : (
-                          <span className="text-xs text-zinc-500">All ({instantlyAccounts.length}) accounts</span>
+                          <>
+                            <span className="text-xs text-zinc-500">0 of {instantlyAccounts.length} selected — choose at least one to send</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccountEmails(null)}
+                              className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                            >
+                              Use all accounts
+                            </button>
+                          </>
                         )}
                       </div>
                       {instantlyAccounts.length > 0 && (
                         <div className="max-h-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
                           {instantlyAccounts.slice(0, 500).map((acc) => {
-                            const isAll = selectedAccountEmails.length === 0;
-                            const checked = isAll || selectedAccountEmails.includes(acc.email);
+                            const isAll = selectedAccountEmails === null;
+                            const checked = isAll || (Array.isArray(selectedAccountEmails) && selectedAccountEmails.includes(acc.email));
                             return (
                               <label key={acc.email} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-1 py-0.5">
                                 <input
                                   type="checkbox"
                                   checked={checked}
                                   onChange={() => {
-                                    if (selectedAccountEmails.length === 0) {
+                                    if (selectedAccountEmails === null) {
                                       setSelectedAccountEmails(instantlyAccounts.map((a) => a.email).filter((e) => e !== acc.email));
                                     } else if (selectedAccountEmails.includes(acc.email)) {
                                       setSelectedAccountEmails(selectedAccountEmails.filter((e) => e !== acc.email));
