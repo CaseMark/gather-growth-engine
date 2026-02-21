@@ -65,11 +65,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workspace not found. Complete onboarding first." }, { status: 400 });
     }
 
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {};
     if (apiKey && typeof apiKey === "string") {
       headers["Authorization"] = `Bearer ${apiKey}`;
       headers["X-API-Key"] = apiKey; // some APIs use this
     }
+    // Don't send Content-Type: application/json on GET - some servers reject GET with that header and no body
 
     const res = await fetch(url, {
       method: "GET",

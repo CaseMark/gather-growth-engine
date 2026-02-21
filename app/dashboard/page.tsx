@@ -266,6 +266,8 @@ export default function DashboardPage() {
     try {
       const res = await fetch("/api/crawl", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
 
       const data = await res.json();

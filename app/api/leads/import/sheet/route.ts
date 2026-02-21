@@ -19,8 +19,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { sheetUrl } = body as { sheetUrl?: string };
+    let body: { sheetUrl?: string } = {};
+    try {
+      const raw = await request.json();
+      if (raw && typeof raw === "object") body = raw as { sheetUrl?: string };
+    } catch {
+      // Empty or invalid JSON body
+    }
+    const { sheetUrl } = body;
 
     if (!sheetUrl || typeof sheetUrl !== "string") {
       return NextResponse.json(
