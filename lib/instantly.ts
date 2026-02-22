@@ -190,10 +190,11 @@ function createInstantlyClient(apiKey: string) {
       return request("PATCH", `/accounts/${encoded}`, data);
     },
 
-    /** Apply conservative ramp for accounts that are not warmed up: lower daily_limit, enable_slow_ramp. Leaves warmed accounts unchanged. If accountEmails is provided, only those accounts are updated. */
+    /** Set daily send limits: cold inboxes get unwarmedDailyLimit + slow ramp; warm inboxes get warmedDailyLimit. If accountEmails is set, only those accounts are updated. */
     async applyRampForUnwarmedAccounts(options?: {
       unwarmedDailyLimit?: number;
-      /** If set, only apply ramp to these account emails; otherwise all accounts. */
+      warmedDailyLimit?: number;
+      /** If set, only apply to these account emails; otherwise all accounts. */
       accountEmails?: string[];
     }): Promise<{ updated: number }> {
       let accounts = await this.listAccounts();
@@ -202,16 +203,20 @@ function createInstantlyClient(apiKey: string) {
         const set = new Set(filter.map((e) => e.toLowerCase().trim()));
         accounts = accounts.filter((a) => set.has(a.email.toLowerCase()));
       }
-      const unwarmedLimit = options?.unwarmedDailyLimit ?? 15;
+      const unwarmedLimit = options?.unwarmedDailyLimit ?? 5;
+      const warmedLimit = options?.warmedDailyLimit ?? 30;
       let updated = 0;
       for (const acc of accounts) {
         const isWarmed = acc.warmup_status === 1;
-        if (isWarmed) continue; // don't change limits on warmed accounts
         try {
-          await this.patchAccount(acc.email, {
-            daily_limit: unwarmedLimit,
-            enable_slow_ramp: true,
-          });
+          if (isWarmed) {
+            await this.patchAccount(acc.email, { daily_limit: warmedLimit });
+          } else {
+            await this.patchAccount(acc.email, {
+              daily_limit: unwarmedLimit,
+              enable_slow_ramp: true,
+            });
+          }
           updated++;
         } catch {
           // skip failed account

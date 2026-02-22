@@ -73,7 +73,8 @@ export async function POST(request: Request) {
     const { client } = ctx;
 
     await client.applyRampForUnwarmedAccounts({
-      unwarmedDailyLimit: 15,
+      unwarmedDailyLimit: 5,
+      warmedDailyLimit: 30,
       ...(selectedEmails != null && selectedEmails.length > 0 && { accountEmails: selectedEmails }),
     });
 
@@ -104,11 +105,16 @@ export async function POST(request: Request) {
     } catch {
       // use default 3 steps
     }
-    const sequenceSteps = playbookSteps.map((s, i) => ({
-      subject: `{{step${i + 1}_subject}}`,
-      body: `{{step${i + 1}_body}}`,
-      delayDays: s.delayDays,
-    }));
+    // Ensure at least 2–3 days between steps (best practice). Step 0 = immediate; steps 1+ = min 2–3 days gap.
+    const minGapDays = () => 2 + Math.floor(Math.random() * 2); // 2 or 3 randomly
+    const sequenceSteps = playbookSteps.map((s, i) => {
+      const delay = i === 0 ? 0 : Math.max(s.delayDays, minGapDays());
+      return {
+        subject: `{{step${i + 1}_subject}}`,
+        body: `{{step${i + 1}_body}}`,
+        delayDays: delay,
+      };
+    });
 
     // Get a lead's steps array (from stepsJson or legacy step1/2/3), padded to numSteps
     type LeadWithSteps = typeof batch.leads[0] & { stepsJson?: string | null };
@@ -290,7 +296,7 @@ export async function POST(request: Request) {
       leads_uploaded: addResult.leads_uploaded,
       duplicated_leads: addResult.duplicated_leads,
       in_blocklist: addResult.in_blocklist,
-      message: `Campaign "${campaignName}" created and activated. Unwarmed mailboxes ramped slowly (15/day); warmed mailboxes 80/day.`,
+      message: `Campaign "${campaignName}" created and activated. Cold inboxes 5/day; warm inboxes 30/day. Sequence steps have 2–3 day gaps.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send to Instantly";

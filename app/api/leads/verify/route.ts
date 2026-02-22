@@ -27,11 +27,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { batchId } = body as { batchId?: string };
+    const { batchId, offset: offsetParam, limit: limitParam } = body as { batchId?: string; offset?: number; limit?: number };
 
     if (!batchId || typeof batchId !== "string") {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
+    const offset = Math.max(0, Number(offsetParam) || 0);
+    const limit = Math.min(1000, Math.max(1, Number(limitParam) || 1000));
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
@@ -50,10 +52,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Batch not found" }, { status: 404 });
     }
 
+    const total = batch.leads.length;
+    const chunk = batch.leads.slice(offset, offset + limit);
+    if (chunk.length === 0) {
+      return NextResponse.json({ done: 0, total, verified: 0, invalid: 0, message: "No leads in range." });
+    }
+
     let verified = 0;
     let invalid = 0;
 
-    for (const lead of batch.leads) {
+    for (const lead of chunk) {
       const email = lead.email.trim();
       const syntaxOk = isValidSyntax(email);
       if (!syntaxOk) {
@@ -70,9 +78,11 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
+      done: chunk.length,
+      total,
       verified,
       invalid,
-      message: `Verified ${batch.leads.length} leads: ${verified} valid, ${invalid} invalid or no MX.`,
+      message: `Verified ${chunk.length} leads: ${verified} valid, ${invalid} invalid or no MX.`,
     });
   } catch (error) {
     console.error("Leads verify error:", error);

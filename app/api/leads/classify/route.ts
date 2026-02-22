@@ -15,11 +15,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { batchId } = body as { batchId?: string };
+    const { batchId, offset: offsetParam, limit: limitParam } = body as { batchId?: string; offset?: number; limit?: number };
 
     if (!batchId || typeof batchId !== "string") {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
+    const offset = Math.max(0, Number(offsetParam) || 0);
+    const limit = Math.min(300, Math.max(CLASSIFY_CHUNK_SIZE, Number(limitParam) || 300));
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
@@ -44,7 +46,12 @@ export async function POST(request: Request) {
     }
 
     const anthropicKey = decrypt(workspace.anthropicKey);
-    const leads = batch.leads;
+    const leads = batch.leads.slice(offset, offset + limit);
+    const total = batch.leads.length;
+    if (leads.length === 0) {
+      return NextResponse.json({ done: 0, total, classified: 0, message: "No leads in range." });
+    }
+
     let classified = 0;
 
     for (let i = 0; i < leads.length; i += CLASSIFY_CHUNK_SIZE) {
@@ -98,8 +105,9 @@ Example: [{"email":"a@b.com","persona":"VP Sales","vertical":"SaaS"},...]`;
     }
 
     return NextResponse.json({
+      done: leads.length,
+      total,
       classified,
-      total: leads.length,
       message: `Classified ${classified} leads with persona and vertical.`,
     });
   } catch (error) {

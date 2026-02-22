@@ -14,11 +14,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { batchId } = body as { batchId: string };
+    const { batchId, offset: offsetParam, limit: limitParam } = body as { batchId: string; offset?: number; limit?: number };
 
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
+    const offset = Math.max(0, Number(offsetParam) || 0);
+    const CHUNK_SIZE = 150;
+    const limit = Math.min(CHUNK_SIZE, Math.max(1, Number(limitParam) || CHUNK_SIZE));
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
@@ -35,6 +38,12 @@ export async function POST(request: Request) {
 
     if (!batch) {
       return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+    }
+
+    const total = batch.leads.length;
+    const chunk = batch.leads.slice(offset, offset + limit);
+    if (chunk.length === 0) {
+      return NextResponse.json({ done: 0, total, message: "No leads in range." });
     }
 
     let playbook: { steps: Array<{ subject: string; body: string; delayDays: number }> };
@@ -79,7 +88,7 @@ export async function POST(request: Request) {
       .map((s, i) => `Step ${i + 1} subject: ${s.subject}\nStep ${i + 1} body: ${s.body}`)
       .join("\n\n");
 
-    for (const lead of batch.leads) {
+    for (const lead of chunk) {
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
         const parts: string[] = [];
@@ -169,9 +178,9 @@ Example: {${stepExample}}`;
     }
 
     return NextResponse.json({
-      done: true,
-      count: batch.leads.length,
-      message: `Personalized ${batch.leads.length} lead(s), ${steps.length} steps each.`,
+      done: chunk.length,
+      total,
+      message: `Personalized ${chunk.length} lead(s), ${steps.length} steps each.`,
     });
   } catch (error: any) {
     console.error("Leads generate error:", error);

@@ -574,40 +574,71 @@ export default function DashboardPage() {
     setLeadPipelineMessage(null);
     try {
       let msg = "";
-      const res1 = await fetch("/api/leads/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: selectedBatchId }),
-      });
-      const d1 = await res1.json();
-      if (!res1.ok) {
-        setLeadsError(d1.error ?? "Generate failed");
-        setPrepareLeadsLoading(false);
-        return;
+      let offset = 0;
+      let total = 0;
+
+      while (true) {
+        const res1 = await fetch("/api/leads/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 150 }),
+        });
+        const d1 = await res1.json();
+        if (!res1.ok) {
+          setLeadsError(d1.error ?? "Generate failed");
+          setPrepareLeadsLoading(false);
+          return;
+        }
+        total = d1.total ?? 0;
+        offset += d1.done ?? 0;
+        setLeadPipelineMessage(`Personalizing... ${offset}/${total}`);
+        if (d1.done === 0 || offset >= total) break;
       }
-      msg = d1.message ?? "Generated";
+      msg = `Personalized ${total} leads.`;
 
-      const res2 = await fetch("/api/leads/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: selectedBatchId }),
-      });
-      const d2 = await res2.json();
-      if (res2.ok) msg += " · " + (d2.message ?? "Verified");
+      offset = 0;
+      while (true) {
+        const res2 = await fetch("/api/leads/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 1000 }),
+        });
+        const d2 = await res2.json();
+        if (!res2.ok) {
+          setLeadsError(d2.error ?? "Verify failed");
+          setPrepareLeadsLoading(false);
+          return;
+        }
+        offset += d2.done ?? 0;
+        setLeadPipelineMessage(`Verifying... ${offset}/${d2.total ?? total}`);
+        if (d2.done === 0 || offset >= (d2.total ?? total)) break;
+      }
+      msg += " Verified.";
 
-      const res3 = await fetch("/api/leads/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: selectedBatchId }),
-      });
-      const d3 = await res3.json();
-      if (res3.ok) msg += " · " + (d3.message ?? "Classified");
+      offset = 0;
+      while (true) {
+        const res3 = await fetch("/api/leads/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 300 }),
+        });
+        const d3 = await res3.json();
+        if (!res3.ok) {
+          setLeadsError(d3.error ?? "Classify failed");
+          setPrepareLeadsLoading(false);
+          return;
+        }
+        offset += d3.done ?? 0;
+        setLeadPipelineMessage(`Classifying... ${offset}/${d3.total ?? total}`);
+        if (d3.done === 0 || offset >= (d3.total ?? total)) break;
+      }
+      msg += " Classified.";
 
       setLeadPipelineMessage(msg);
       const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
       setLeads(list.leads ?? []);
-    } catch {
-      setLeadsError("Prepare failed.");
+    } catch (e) {
+      setLeadsError(e instanceof Error ? e.message : "Prepare failed.");
     } finally {
       setPrepareLeadsLoading(false);
     }
@@ -1138,8 +1169,8 @@ export default function DashboardPage() {
                           </button>
                         </div>
                         <div className="space-y-4">
-                          {editingSteps.map((step, index) => (
-                            <div key={step.stepNumber} className="rounded-md border border-zinc-700 bg-zinc-900/50 p-4">
+                          {editingSteps.slice(0, 10).map((step, index) => (
+                            <div key={`step-${index}`} className="rounded-md border border-zinc-700 bg-zinc-900/50 p-4">
                               <div className="text-xs text-zinc-500 mb-2">Step {step.stepNumber} {step.delayDays > 0 && `(after ${step.delayDays} days)`}</div>
                               <label className="block text-xs text-zinc-500 mt-2">Subject</label>
                               <input
@@ -1203,8 +1234,13 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {playbookData.playbookApproved && (
+            {(playbookData.playbookApproved || editingSteps.length > 0) && (
               <div className="card p-6">
+                {!playbookData.playbookApproved && editingSteps.length > 0 && (
+                  <div className="mb-4 rounded-md border border-amber-800 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
+                    Playbook has unsaved edits. Click &quot;Save edits&quot; then &quot;Approve playbook&quot; to use this sequence for sending.
+                  </div>
+                )}
                 <h2 className="text-lg font-medium text-zinc-200">Leads & personalized emails</h2>
                 <p className="mt-1 text-sm text-zinc-500">Upload CSV, or import from Google Sheet or API. Columns: email, name, company, job title, industry (email required).</p>
                 <div className="mt-4 flex flex-wrap gap-3 items-end">
@@ -1303,15 +1339,15 @@ export default function DashboardPage() {
                     </button>
                     <button
                       onClick={handlePrepareLeads}
-                      disabled={prepareLeadsLoading || !selectedBatchId}
+                      disabled={prepareLeadsLoading || !selectedBatchId || !playbookData.playbookApproved}
                       className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                      title="Generate 3 emails per lead, verify, and classify (persona + vertical)"
+                      title={!playbookData.playbookApproved ? "Save and approve playbook first" : "Generate emails per lead, verify, and classify (persona + vertical). Batched for large lists."}
                     >
                       {prepareLeadsLoading ? "Preparing..." : "Prepare leads"}
                     </button>
                     <button
                       onClick={handleSendToInstantly}
-                      disabled={sendingToInstantly || !selectedBatchId || leads.length === 0 || !campaignNameInput.trim() || (Array.isArray(selectedAccountEmails) && selectedAccountEmails.length === 0)}
+                      disabled={sendingToInstantly || !selectedBatchId || leads.length === 0 || !campaignNameInput.trim() || !playbookData.playbookApproved || (Array.isArray(selectedAccountEmails) && selectedAccountEmails.length === 0)}
                       className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
                       title="Create Instantly campaign, add leads, apply slow ramp for unwarmed mailboxes, and activate"
                     >
@@ -1525,7 +1561,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {playbookData.playbookApproved && (
+            {(playbookData.playbookApproved || editingSteps.length > 0) && (
               <div className="card p-6">
                 <h2 className="text-lg font-medium text-zinc-200">Campaign performance</h2>
                 <p className="mt-1 text-sm text-zinc-500">Opens, clicks, and suggestions for campaigns you sent to Instantly.</p>
@@ -1692,7 +1728,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {playbookData.playbookApproved && (
+            {(playbookData.playbookApproved || editingSteps.length > 0) && (
               <div className="card p-6">
                 <h2 className="text-lg font-medium text-zinc-200">Performance memory</h2>
                 <p className="mt-1 text-sm text-zinc-500">What works by persona and vertical (from campaign analytics and reply classifications). Used by the strategy engine.</p>
