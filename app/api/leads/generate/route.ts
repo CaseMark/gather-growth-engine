@@ -6,6 +6,9 @@ import { decrypt } from "@/lib/encryption";
 import { callAnthropic } from "@/lib/anthropic";
 import { getAggregatedMemory } from "@/lib/performance-memory";
 
+// Allow up to 60s so a few Anthropic calls can finish (Vercel Pro; Hobby may still cap at 10s)
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -20,8 +23,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
     const offset = Math.max(0, Number(offsetParam) || 0);
-    // Keep small to avoid Vercel FUNCTION_INVOCATION_TIMEOUT (each lead = 1 Anthropic call)
-    const CHUNK_SIZE = 10;
+    // Tiny chunks: each lead = 1 Anthropic call (~3–5s). 2 leads ≈ 6–10s to stay under Vercel timeout.
+    const CHUNK_SIZE = 2;
     const limit = Math.min(CHUNK_SIZE, Math.max(1, Number(limitParam) || CHUNK_SIZE));
 
     const workspace = await prisma.workspace.findUnique({

@@ -622,7 +622,7 @@ export default function DashboardPage() {
         const res1 = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 10 }),
+          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 2 }),
         });
         const r1 = await parsePrepareResponse(res1);
         if (!r1.ok) {
