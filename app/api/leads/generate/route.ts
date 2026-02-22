@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     }
     const offset = Math.max(0, Number(offsetParam) || 0);
     // Keep small to avoid Vercel FUNCTION_INVOCATION_TIMEOUT (each lead = 1 Anthropic call)
-    const CHUNK_SIZE = 25;
+    const CHUNK_SIZE = 10;
     const limit = Math.min(CHUNK_SIZE, Math.max(1, Number(limitParam) || CHUNK_SIZE));
 
     const workspace = await prisma.workspace.findUnique({
