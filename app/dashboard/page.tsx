@@ -567,35 +567,50 @@ export default function DashboardPage() {
     }
   };
 
+  /** Parse API response as JSON; on non-JSON (e.g. "An error occurred...") return error text so we can show it instead of throwing. */
+  const parsePrepareResponse = async (res: Response): Promise<{ ok: boolean; data: Record<string, unknown>; errorMessage: string }> => {
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text) as Record<string, unknown>;
+      const errorMessage = typeof data?.error === "string" ? data.error : "";
+      return { ok: res.ok, data, errorMessage: res.ok ? "" : (errorMessage || text || "Request failed") };
+    } catch {
+      return { ok: false, data: {}, errorMessage: res.ok ? "Invalid response" : (text || "Request failed") };
+    }
+  };
+
   const handlePrepareLeads = async () => {
     if (!selectedBatchId) return;
     setPrepareLeadsLoading(true);
     setLeadsError("");
     setLeadPipelineMessage(null);
     try {
-      let msg = "";
-      let offset = 0;
       let total = 0;
 
+      // Step 1/3: Personalize — AI writes each lead's email sequence
+      setLeadPipelineMessage("Step 1/3: Personalizing emails… (starting)");
+      let offset = 0;
       while (true) {
         const res1 = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 150 }),
         });
-        const d1 = await res1.json();
-        if (!res1.ok) {
-          setLeadsError(d1.error ?? "Generate failed");
+        const r1 = await parsePrepareResponse(res1);
+        if (!r1.ok) {
+          setLeadsError(r1.errorMessage || "Generate failed");
           setPrepareLeadsLoading(false);
           return;
         }
+        const d1 = r1.data as { done?: number; total?: number };
         total = d1.total ?? 0;
         offset += d1.done ?? 0;
-        setLeadPipelineMessage(`Personalizing... ${offset}/${total}`);
+        setLeadPipelineMessage(`Step 1/3: Personalizing emails… ${offset.toLocaleString()} / ${total.toLocaleString()}`);
         if (d1.done === 0 || offset >= total) break;
       }
-      msg = `Personalized ${total} leads.`;
 
+      // Step 2/3: Verify — check email domains (MX)
+      setLeadPipelineMessage("Step 2/3: Verifying email addresses… (starting)");
       offset = 0;
       while (true) {
         const res2 = await fetch("/api/leads/verify", {
@@ -603,18 +618,21 @@ export default function DashboardPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 1000 }),
         });
-        const d2 = await res2.json();
-        if (!res2.ok) {
-          setLeadsError(d2.error ?? "Verify failed");
+        const r2 = await parsePrepareResponse(res2);
+        if (!r2.ok) {
+          setLeadsError(r2.errorMessage || "Verify failed");
           setPrepareLeadsLoading(false);
           return;
         }
+        const d2 = r2.data as { done?: number; total?: number };
+        const verifyTotal = d2.total ?? total;
         offset += d2.done ?? 0;
-        setLeadPipelineMessage(`Verifying... ${offset}/${d2.total ?? total}`);
-        if (d2.done === 0 || offset >= (d2.total ?? total)) break;
+        setLeadPipelineMessage(`Step 2/3: Verifying email addresses… ${offset.toLocaleString()} / ${verifyTotal.toLocaleString()}`);
+        if (d2.done === 0 || offset >= verifyTotal) break;
       }
-      msg += " Verified.";
 
+      // Step 3/3: Classify — assign persona & vertical per lead
+      setLeadPipelineMessage("Step 3/3: Classifying leads (persona & vertical)… (starting)");
       offset = 0;
       while (true) {
         const res3 = await fetch("/api/leads/classify", {
@@ -622,19 +640,20 @@ export default function DashboardPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 300 }),
         });
-        const d3 = await res3.json();
-        if (!res3.ok) {
-          setLeadsError(d3.error ?? "Classify failed");
+        const r3 = await parsePrepareResponse(res3);
+        if (!r3.ok) {
+          setLeadsError(r3.errorMessage || "Classify failed");
           setPrepareLeadsLoading(false);
           return;
         }
+        const d3 = r3.data as { done?: number; total?: number };
+        const classifyTotal = d3.total ?? total;
         offset += d3.done ?? 0;
-        setLeadPipelineMessage(`Classifying... ${offset}/${d3.total ?? total}`);
-        if (d3.done === 0 || offset >= (d3.total ?? total)) break;
+        setLeadPipelineMessage(`Step 3/3: Classifying leads… ${offset.toLocaleString()} / ${classifyTotal.toLocaleString()}`);
+        if (d3.done === 0 || offset >= classifyTotal) break;
       }
-      msg += " Classified.";
 
-      setLeadPipelineMessage(msg);
+      setLeadPipelineMessage(`Done. Personalized, verified, and classified ${total.toLocaleString()} leads.`);
       const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
       setLeads(list.leads ?? []);
     } catch (e) {
@@ -1341,7 +1360,7 @@ export default function DashboardPage() {
                       onClick={handlePrepareLeads}
                       disabled={prepareLeadsLoading || !selectedBatchId || !playbookData.playbookApproved}
                       className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                      title={!playbookData.playbookApproved ? "Save and approve playbook first" : "Generate emails per lead, verify, and classify (persona + vertical). Batched for large lists."}
+                      title={!playbookData.playbookApproved ? "Save and approve playbook first" : "1) Personalize — AI writes each lead’s sequence. 2) Verify — check email domains. 3) Classify — persona & vertical. Progress shown below."}
                     >
                       {prepareLeadsLoading ? "Preparing..." : "Prepare leads"}
                     </button>
@@ -1472,9 +1491,14 @@ export default function DashboardPage() {
                     )}
                   </div>
                 )}
-                {leadPipelineMessage && (
+                {(leadPipelineMessage || prepareLeadsLoading) && (
                   <div className="mt-3 rounded-md bg-zinc-800/80 border border-zinc-700 px-3 py-2 text-sm text-zinc-300">
-                    {leadPipelineMessage}
+                    {leadPipelineMessage ?? "Preparing…"}
+                    {prepareLeadsLoading && (
+                      <p className="mt-1.5 text-xs text-zinc-500">
+                        Steps: 1) Personalize emails per lead · 2) Verify email domains · 3) Classify persona & vertical
+                      </p>
+                    )}
                   </div>
                 )}
                 {sendToInstantlyResult && (
