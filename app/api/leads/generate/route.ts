@@ -29,6 +29,7 @@ export async function POST(request: Request) {
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
+      select: { id: true, anthropicKey: true, anthropicModel: true, productSummary: true, icp: true, proofPointsJson: true, playbookJson: true },
     });
 
     if (!workspace?.anthropicKey) {
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
     const stepExample = steps.map((_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
 
     const anthropicKey = decrypt(workspace.anthropicKey);
+    const model = workspace.anthropicModel ?? undefined;
     const productSummary = workspace.productSummary ?? "";
     const icp = workspace.icp ?? "";
 
@@ -93,6 +95,9 @@ export async function POST(request: Request) {
     const templatesJson = steps
       .map((s, i) => `Step ${i + 1} subject: ${s.subject}\nStep ${i + 1} body: ${s.body}`)
       .join("\n\n");
+
+    let usageTotal = { input_tokens: 0, output_tokens: 0 };
+    const leadIds: string[] = [];
 
     for (const lead of chunk) {
       let strategyBlock = "";
@@ -130,7 +135,12 @@ Respond with ONLY a valid JSON object with keys ${stepKeys} (only include steps 
 Example: {${stepExample}}`;
 
       try {
-        const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400 });
+        const { text: raw, usage } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400, model });
+        if (usage) {
+          usageTotal.input_tokens += usage.input_tokens;
+          usageTotal.output_tokens += usage.output_tokens;
+        }
+        leadIds.push(lead.id);
         let jsonStr = raw.trim();
         const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlock) jsonStr = codeBlock[1].trim();
@@ -186,6 +196,8 @@ Example: {${stepExample}}`;
     return NextResponse.json({
       done: chunk.length,
       total,
+      leadIds,
+      usage: usageTotal.input_tokens > 0 || usageTotal.output_tokens > 0 ? usageTotal : undefined,
       message: `Personalized ${chunk.length} lead(s), ${steps.length} steps each.`,
     });
   } catch (error: any) {

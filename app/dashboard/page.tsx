@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
+import { ANTHROPIC_MODELS } from "@/lib/anthropic";
 
 export default function DashboardPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
@@ -137,6 +138,8 @@ export default function DashboardPage() {
   const [prepareDoClassify, setPrepareDoClassify] = useState(true);
   /** Current step percent (0–100) for progress bar during Prepare. */
   const [prepareProgressPct, setPrepareProgressPct] = useState<number | null>(null);
+  /** Token usage accumulated this session from generate/classify. */
+  const [sessionTokenUsage, setSessionTokenUsage] = useState({ input_tokens: 0, output_tokens: 0 });
   const [instantlyAdvancedOpen, setInstantlyAdvancedOpen] = useState(false);
   const INSTANTLY_ACCOUNTS_PAGE_SIZE = 10;
 
@@ -580,6 +583,12 @@ export default function DashboardPage() {
         setClassifyingLeads(false);
         return;
       }
+      if (data.usage) {
+        setSessionTokenUsage((u) => ({
+          input_tokens: u.input_tokens + (data.usage.input_tokens ?? 0),
+          output_tokens: u.output_tokens + (data.usage.output_tokens ?? 0),
+        }));
+      }
       setLeadPipelineMessage(data.message ?? `Classified ${data.classified} leads.`);
       const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
       setLeads(list.leads ?? []);
@@ -630,9 +639,15 @@ export default function DashboardPage() {
           setPrepareLeadsLoading(false);
           return;
         }
-        const d1 = r1.data as { done?: number; total?: number };
+        const d1 = r1.data as { done?: number; total?: number; usage?: { input_tokens: number; output_tokens: number } };
         total = d1.total ?? 0;
         offset += d1.done ?? 0;
+        if (d1.usage) {
+          setSessionTokenUsage((u) => ({
+            input_tokens: u.input_tokens + d1.usage!.input_tokens,
+            output_tokens: u.output_tokens + d1.usage!.output_tokens,
+          }));
+        }
         const pct1 = total > 0 ? Math.round((offset / total) * 100) : 0;
         setPrepareProgressPct(pct1);
         setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[0]}… ${offset.toLocaleString()} / ${total.toLocaleString()} (${pct1}%)`);
@@ -689,9 +704,15 @@ export default function DashboardPage() {
             setPrepareLeadsLoading(false);
             return;
           }
-          const d3 = r3.data as { done?: number; total?: number };
+          const d3 = r3.data as { done?: number; total?: number; usage?: { input_tokens: number; output_tokens: number } };
           const classifyTotal = d3.total ?? total;
           offset += d3.done ?? 0;
+          if (d3.usage) {
+            setSessionTokenUsage((u) => ({
+              input_tokens: u.input_tokens + d3.usage!.input_tokens,
+              output_tokens: u.output_tokens + d3.usage!.output_tokens,
+            }));
+          }
           const pct3 = classifyTotal > 0 ? Math.round((offset / classifyTotal) * 100) : 0;
           setPrepareProgressPct(pct3);
           setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[2]}… ${offset.toLocaleString()} / ${classifyTotal.toLocaleString()} (${pct3}%)`);
@@ -806,6 +827,12 @@ export default function DashboardPage() {
         setLeadsError(data.error || "Generate failed");
         setGeneratingLeads(false);
         return;
+      }
+      if (data.usage) {
+        setSessionTokenUsage((u) => ({
+          input_tokens: u.input_tokens + (data.usage.input_tokens ?? 0),
+          output_tokens: u.output_tokens + (data.usage.output_tokens ?? 0),
+        }));
       }
       const batchData = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
       setLeads(batchData.leads ?? []);
@@ -1453,6 +1480,28 @@ export default function DashboardPage() {
                         </option>
                       ))}
                     </select>
+                    <span className="text-sm text-zinc-400">AI model:</span>
+                    <select
+                      value={workspace?.anthropicModel ?? ANTHROPIC_MODELS[0].id}
+                      onChange={async (e) => {
+                        const value = e.target.value;
+                        try {
+                          const r = await fetch("/api/workspace", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ anthropicModel: value || null }),
+                          });
+                          if (r.ok) setWorkspace((w: any) => (w ? { ...w, anthropicModel: value || null } : w));
+                        } catch {}
+                      }}
+                      className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200"
+                    >
+                      {ANTHROPIC_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-zinc-400 whitespace-nowrap">Campaign name:</span>
                       <input
@@ -1682,6 +1731,16 @@ export default function DashboardPage() {
                         Steps: 1) Personalize emails per lead · 2) Verify email domains · 3) Classify persona & vertical
                       </p>
                     )}
+                    {(sessionTokenUsage.input_tokens > 0 || sessionTokenUsage.output_tokens > 0) && (
+                      <p className="mt-1.5 text-xs text-zinc-500">
+                        Tokens: {sessionTokenUsage.input_tokens.toLocaleString()} in / {sessionTokenUsage.output_tokens.toLocaleString()} out (this session)
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!(leadPipelineMessage || prepareLeadsLoading) && (sessionTokenUsage.input_tokens > 0 || sessionTokenUsage.output_tokens > 0) && (
+                  <div className="mt-3 text-xs text-zinc-500">
+                    Token usage (this session): {sessionTokenUsage.input_tokens.toLocaleString()} in / {sessionTokenUsage.output_tokens.toLocaleString()} out
                   </div>
                 )}
                 {sendToInstantlyResult && (

@@ -1,0 +1,2 @@
+# Exclude Cursor rules and local IDE data from deploy (avoids build/CI issues)
+.cursor

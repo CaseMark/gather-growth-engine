@@ -25,6 +25,7 @@ export async function POST(request: Request) {
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
+      select: { id: true, anthropicKey: true, anthropicModel: true, icp: true },
     });
 
     if (!workspace?.anthropicKey) {
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
     }
 
     const anthropicKey = decrypt(workspace.anthropicKey);
+    const model = workspace.anthropicModel ?? undefined;
+    let usageTotal = { input_tokens: 0, output_tokens: 0 };
     // Only process leads not yet classified (resume without redoing)
     const needsWork = batch.leads.filter((l) => !l.persona || !l.vertical);
     const total = needsWork.length;
@@ -76,7 +79,11 @@ ${leadList}
 Respond with ONLY a valid JSON array, no other text. One object per lead in the same order as above. Each object: { "email": "...", "persona": "...", "vertical": "..." }
 Example: [{"email":"a@b.com","persona":"VP Sales","vertical":"SaaS"},...]`;
 
-      const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000 });
+      const { text: raw, usage } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000, model });
+      if (usage) {
+        usageTotal.input_tokens += usage.input_tokens;
+        usageTotal.output_tokens += usage.output_tokens;
+      }
       let jsonStr = raw.trim();
       const codeBlock = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (codeBlock) jsonStr = codeBlock[1].trim();
@@ -110,6 +117,7 @@ Example: [{"email":"a@b.com","persona":"VP Sales","vertical":"SaaS"},...]`;
       done: leads.length,
       total,
       classified,
+      usage: usageTotal.input_tokens > 0 || usageTotal.output_tokens > 0 ? usageTotal : undefined,
       message: `Classified ${classified} leads with persona and vertical.`,
     });
   } catch (error) {
