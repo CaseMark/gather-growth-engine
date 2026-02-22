@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuth } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const auth = await getAuth(request);
+    if (auth.type === "none" || !auth.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -14,7 +13,7 @@ export async function GET(request: Request) {
     const batchId = searchParams.get("batchId");
 
     const workspace = await prisma.workspace.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: auth.userId },
     });
 
     if (!workspace) {

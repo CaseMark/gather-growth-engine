@@ -1547,6 +1547,21 @@ export default function DashboardPage() {
                         className="min-w-[200px] rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                       />
                     </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-zinc-400 whitespace-nowrap">AI model:</span>
+                      <select
+                        value={workspace?.anthropicModel ?? ANTHROPIC_MODELS[0].id}
+                        onChange={(e) => handleSaveModel(e.target.value)}
+                        className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 min-w-[200px]"
+                        title="Choose which Claude model to use for personalization and classification (affects cost)"
+                      >
+                        {ANTHROPIC_MODELS.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <button
                       onClick={handleDeleteBatch}
                       disabled={deleteBatchLoading || !selectedBatchId}
@@ -1571,6 +1586,11 @@ export default function DashboardPage() {
                     >
                       {sendingToInstantly ? "Sending..." : "Send to Instantly"}
                     </button>
+                  </div>
+                )}
+                {batches.length > 0 && (
+                  <div className="mt-3 flex items-center gap-4 text-sm text-zinc-400">
+                    <span>Token usage (this session): {prepareTokens.input.toLocaleString()} in / {prepareTokens.output.toLocaleString()} out</span>
                   </div>
                 )}
                 {batches.length > 0 && (
@@ -1761,11 +1781,9 @@ export default function DashboardPage() {
                         />
                       </div>
                     )}
-                    {(prepareTokens.input > 0 || prepareTokens.output > 0) && (
-                      <p className="mt-1.5 text-xs text-zinc-400">
-                        Tokens: {prepareTokens.input.toLocaleString()} in / {prepareTokens.output.toLocaleString()} out
-                      </p>
-                    )}
+                    <p className="mt-1.5 text-xs text-zinc-400">
+                      Tokens: {prepareTokens.input.toLocaleString()} in / {prepareTokens.output.toLocaleString()} out
+                    </p>
                     {prepareLeadsLoading && (
                       <p className="mt-1.5 text-xs text-zinc-500">
                         Steps: 1) Personalize emails per lead · 2) Verify email domains · 3) Classify persona & vertical

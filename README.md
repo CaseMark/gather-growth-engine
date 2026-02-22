@@ -30,8 +30,8 @@ Create `.env` from `.env.example` and set:
 | `GOOGLE_CLIENT_ID` | Optional | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth client secret |
 | `ADMIN_EMAILS` | Optional | Comma-separated emails that can access `/admin` analytics |
-| `RESEND_API_KEY` | Optional | For verification emails (Resend); omit to skip sending |
-| `RESEND_FROM_EMAIL` | Optional | From address for verification emails |
+| `RESEND_API_KEY` | Yes (prod) | Required for verification emails in production. Get a free key at [resend.com](https://resend.com). |
+| `RESEND_FROM_EMAIL` | Optional | From address (default `onboarding@resend.dev` until you verify a domain) |
 
 User API keys (Anthropic, Instantly) are stored encrypted per workspace after onboarding.
 
@@ -75,6 +75,17 @@ Tests cover API route validation (e.g. unauthenticated send returns 401, missing
 
 If you set `ADMIN_EMAILS` (comma-separated list of emails) in your environment, those users can open **`/admin`** after logging in to see product analytics: total users, signups (7d / 30d), campaigns sent, total leads, workspaces with domain, and tables of recent signups and recent campaigns.
 
+## Skills (pluggable modules)
+
+You can add **skills**—pluggable modules that run on a schedule or on demand (e.g. “post to LinkedIn twice a day for engagement”). Each skill lives under `skills/<id>/` with a manifest and a `run` function, and is registered in `skills/registry.ts`. Scheduled skills run via **Vercel Cron** (see `vercel.json` → `crons`; set `CRON_SECRET` in Vercel).
+
+- **How to add a skill:** [docs/SKILLS.md](docs/SKILLS.md)
+- **APIs:** `GET /api/skills` (list), `POST /api/skills/[id]/run` (run; auth: session or `X-API-Key`)
+
+## MCP (AI assistants)
+
+An **MCP server** in `mcp-server/` exposes the app so AI tools (Cursor, Claude, etc.) can call it via the Model Context Protocol. Tools: **list_campaigns**, **list_skills**, **run_skill**. Set `GATHER_GROWTH_API_URL`, `MCP_API_KEY` (or `GATHER_GROWTH_API_KEY`), and optionally `MCP_USER_ID` in the app env and when running the MCP server. See [mcp-server/README.md](mcp-server/README.md).
+
 ## Project layout
 
 ```
@@ -85,13 +96,21 @@ app/
   dashboard/        # Post-login home (protected)
   onboarding/       # Domain + keys (protected)
   api/auth/         # NextAuth routes
+  api/skills/       # List skills, run skill by id
+  api/cron/         # Vercel Cron: run scheduled skills
 lib/
   auth.ts           # NextAuth config
+  api-auth.ts       # Session or X-API-Key (for MCP / skills)
   prisma.ts         # Prisma client
+skills/             # Pluggable skills (manifest + run)
+  registry.ts       # Register all skills
+  linkedin-engagement/  # Example skill
+mcp-server/         # MCP server (stdio) for AI tools
 prisma/
   schema.prisma     # Database schema
 docs/
   SPEC.md           # Product spec (living doc)
+  SKILLS.md         # How to add a skill
 ```
 
 ## Deploy to Cloud

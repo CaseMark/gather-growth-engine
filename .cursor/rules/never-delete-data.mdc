@@ -1,0 +1,13 @@
+---
+description: NEVER delete or reset user/data — production data is sacred
+alwaysApply: true
+---
+
+# Never Delete User or Production Data
+
+- **NEVER** run `prisma migrate reset`, `prisma db push --force-reset`, or any command that drops tables or wipes the database.
+- **NEVER** suggest or tell the user to answer "yes" to a prompt that says "All data will be lost" or "reset the schema" for a database that has or could have real users.
+- **NEVER** remove migration history or "start a new migration history" if that would require resetting the production database.
+- For schema changes: use **new migrations** (`prisma migrate dev` only on a **copy** of the DB or local dev DB; on production use `prisma migrate deploy`). If there is a provider mismatch (e.g. sqlite vs postgresql), fix the lock file and add new migrations — do **not** delete existing migrations and reset.
+- If the user has one database and it's in the cloud: assume it is **production**. Do not suggest reset. Suggest adding a column/migration that applies without data loss, or using a separate dev database for risky operations.
+- When in doubt: **preserve data**. Prefer additive changes (new columns, new tables) over destructive ones.

@@ -1,0 +1,9 @@
+{
+  "id": "linkedin-engagement",
+  "name": "LinkedIn engagement",
+  "description": "Post to LinkedIn on a schedule (e.g. twice daily) for engagement. Add your own logic in run.ts.",
+  "schedule": {
+    "cron": "0 9,18 * * *",
+    "timezone": "America/New_York"
+  }
+}
