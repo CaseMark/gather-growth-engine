@@ -196,7 +196,13 @@ Analytics, reply classification, performance memory, strategy engine.
 | 2025-02-20 | Step 12 done: Analytics + reply classification. CampaignReply model; POST/GET /api/instantly/sent-campaigns/[id]/replies to log and list replies; classify with Claude (positive, objection, ooo, not_interested, other). Campaign performance section: Replies table + Log reply form. Stored for future performance memory (Step 13). |
 | 2025-02-20 | Step 13 done: Performance memory. PerformanceObservation model (workspaceId, dimensionType, dimensionValue, metric, value, sourceType, sourceId). recordCampaignObservations when analytics fetched (per persona/vertical from batch leads); recordReplyObservation when reply logged (match lead by email). GET /api/performance-memory returns aggregated byPersona/byVertical (avg rates, sum counts). Dashboard: Performance memory card with By persona / By vertical tables. |
 | 2025-02-20 | Step 14 done: Strategy engine. Performance memory fed into personalization prompt (per-lead segment stats); playbook generation prompt includes "Performance so far" block. getStrategySuggestion() in lib/performance-memory (persona/vertical comparisons, low open-rate hint); GET /api/performance-memory returns suggestion; dashboard shows Strategy suggestion in Performance memory card. |
+| 2025-02-21 | **Sending limits:** Cold inboxes 5/day, warm 30/day (applyRampForUnwarmedAccounts). Sequence steps: minimum 2–3 days between steps (random 2 or 3). |
+| 2025-02-21 | **Prepare leads:** Chunked generate/verify/classify with progress (step X/Y, count, **percent**). Safe JSON parse for API errors (show server message instead of "invalid JSON"). **Prepare options modal:** on "Prepare leads" user chooses: Personalize (always), Verify emails (optional), Classify (optional). Smaller generate chunks (25/request) to avoid Vercel FUNCTION_INVOCATION_TIMEOUT. |
+| 2025-02-21 | **Sender list:** Filter by email or domain; "Select by domain" buttons (e.g. @consultinggather.com (5)) when ≤30 domains. |
+| 2025-02-21 | **Leads table:** Pagination 25 per page; Previous/Next, "Page X of Y", "Showing 1–25 of N leads". |
+| 2025-02-21 | **Live campaigns:** Campaign performance section shows table of all sent campaigns (name, created, status, Pause). Pause calls Instantly API (pauseCampaign); paused campaigns stay in list with "Paused" status. "View analytics" dropdown below table for opens/clicks/replies. |
+| 2025-02-21 | **Job title:** Lead job title (CSV columns job title / jobTitle / title) stored and used in personalization and classification; not shown in leads table. |
 
 ---
 
-*Last updated: 2025-02-20*
+*Last updated: 2025-02-21*
