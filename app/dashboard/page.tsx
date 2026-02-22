@@ -1512,7 +1512,7 @@ export default function DashboardPage() {
                                         } else {
                                           const next = domainFullySelected
                                             ? selectedAccountEmails.filter((e) => !emails.includes(e))
-                                            : [...new Set([...selectedAccountEmails, ...emails])];
+                                            : Array.from(new Set([...selectedAccountEmails, ...emails]));
                                           if (next.length === 0) setSelectedAccountEmails([]);
                                           else if (next.length === instantlyAccounts.length) setSelectedAccountEmails(null);
                                           else setSelectedAccountEmails(next);
