@@ -71,6 +71,7 @@ model Workspace {
   proofPointsJson String?  // JSON: [{ title?: string; text: string }]
   playbookJson    String?  // JSON: { steps: [{ subject, body, delayDays }] }
   playbookApproved Boolean @default(false)
+  anthropicModel   String?  // e.g. claude-3-5-haiku, claude-3-5-sonnet (defaults to first in list if unset)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

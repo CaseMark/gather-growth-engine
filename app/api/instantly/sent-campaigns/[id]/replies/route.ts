@@ -100,7 +100,7 @@ Body:
 ${bodySnippet || "(empty)"}
 
 Respond with ONLY one word: positive, objection, ooo, not_interested, or other.`;
-        const raw = await callAnthropic(key, prompt, { maxTokens: 20 });
+        const { text: raw } = await callAnthropic(key, prompt, { maxTokens: 20 });
         const word = raw.trim().toLowerCase();
         if (CLASSIFICATIONS.includes(word as (typeof CLASSIFICATIONS)[number])) {
           classification = word;
