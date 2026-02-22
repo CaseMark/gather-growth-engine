@@ -343,6 +343,11 @@ function createInstantlyClient(apiKey: string) {
       return request("POST", `/campaigns/${campaignId}/activate`);
     },
 
+    /** Pause (stop) a campaign. */
+    async pauseCampaign(campaignId: string): Promise<unknown> {
+      return request("POST", `/campaigns/${campaignId}/pause`);
+    },
+
     /** Get campaign analytics (opens, clicks, sent, etc.). */
     async getCampaignAnalytics(
       campaignId: string,

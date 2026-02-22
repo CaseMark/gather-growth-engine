@@ -123,6 +123,18 @@ export default function DashboardPage() {
   const [dfyOrderResult, setDfyOrderResult] = useState<Record<string, unknown> | null>(null);
   const [selectedPreWarmedDomain, setSelectedPreWarmedDomain] = useState("");
   const [instantlyAccountsShown, setInstantlyAccountsShown] = useState(10);
+  /** Filter for "Accounts to send from" list (by email or domain). */
+  const [accountFilter, setAccountFilter] = useState("");
+  /** Leads table: current page (1-based), 25 per page. */
+  const [leadsPage, setLeadsPage] = useState(1);
+  const LEADS_PER_PAGE = 25;
+  const [pausingCampaignId, setPausingCampaignId] = useState<string | null>(null);
+  /** Campaign IDs we've paused this session (so we can show Paused and hide button). */
+  const [pausedCampaignIds, setPausedCampaignIds] = useState<Set<string>>(new Set());
+  /** Prepare options modal: show and choices. */
+  const [showPrepareOptionsModal, setShowPrepareOptionsModal] = useState(false);
+  const [prepareDoVerify, setPrepareDoVerify] = useState(true);
+  const [prepareDoClassify, setPrepareDoClassify] = useState(true);
   const [instantlyAdvancedOpen, setInstantlyAdvancedOpen] = useState(false);
   const INSTANTLY_ACCOUNTS_PAGE_SIZE = 10;
 
@@ -169,6 +181,10 @@ export default function DashboardPage() {
         .catch(() => {});
     }
   }, [session?.user?.id, playbookData.playbookApproved]);
+
+  useEffect(() => {
+    setLeadsPage(1);
+  }, [selectedBatchId]);
 
   useEffect(() => {
     if (!selectedBatchId) {
@@ -579,22 +595,26 @@ export default function DashboardPage() {
     }
   };
 
-  const handlePrepareLeads = async () => {
+  const runPrepareWithOptions = async (doVerify: boolean, doClassify: boolean) => {
     if (!selectedBatchId) return;
     setPrepareLeadsLoading(true);
     setLeadsError("");
     setLeadPipelineMessage(null);
+    const steps = [true, doVerify, doClassify];
+    const stepLabels = ["Personalizing emails", "Verifying email addresses", "Classifying leads"];
+    const totalSteps = steps.filter(Boolean).length;
+    let stepIndex = 0;
     try {
       let total = 0;
 
-      // Step 1/3: Personalize — AI writes each lead's email sequence
-      setLeadPipelineMessage("Step 1/3: Personalizing emails… (starting)");
+      // Step 1: Personalize — AI writes each lead's email sequence (small chunks to avoid function timeout)
+      setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[0]}… (starting)`);
       let offset = 0;
       while (true) {
         const res1 = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 150 }),
+          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 25 }),
         });
         const r1 = await parsePrepareResponse(res1);
         if (!r1.ok) {
@@ -605,55 +625,65 @@ export default function DashboardPage() {
         const d1 = r1.data as { done?: number; total?: number };
         total = d1.total ?? 0;
         offset += d1.done ?? 0;
-        setLeadPipelineMessage(`Step 1/3: Personalizing emails… ${offset.toLocaleString()} / ${total.toLocaleString()}`);
+        const pct1 = total > 0 ? Math.round((offset / total) * 100) : 0;
+        setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[0]}… ${offset.toLocaleString()} / ${total.toLocaleString()} (${pct1}%)`);
         if (d1.done === 0 || offset >= total) break;
       }
+      stepIndex++;
 
-      // Step 2/3: Verify — check email domains (MX)
-      setLeadPipelineMessage("Step 2/3: Verifying email addresses… (starting)");
-      offset = 0;
-      while (true) {
-        const res2 = await fetch("/api/leads/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 1000 }),
-        });
-        const r2 = await parsePrepareResponse(res2);
-        if (!r2.ok) {
-          setLeadsError(r2.errorMessage || "Verify failed");
-          setPrepareLeadsLoading(false);
-          return;
+      if (doVerify) {
+        setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[1]}… (starting)`);
+        offset = 0;
+        while (true) {
+          const res2 = await fetch("/api/leads/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 1000 }),
+          });
+          const r2 = await parsePrepareResponse(res2);
+          if (!r2.ok) {
+            setLeadsError(r2.errorMessage || "Verify failed");
+            setPrepareLeadsLoading(false);
+            return;
+          }
+          const d2 = r2.data as { done?: number; total?: number };
+          const verifyTotal = d2.total ?? total;
+          offset += d2.done ?? 0;
+          const pct2 = verifyTotal > 0 ? Math.round((offset / verifyTotal) * 100) : 0;
+          setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[1]}… ${offset.toLocaleString()} / ${verifyTotal.toLocaleString()} (${pct2}%)`);
+          if (d2.done === 0 || offset >= verifyTotal) break;
         }
-        const d2 = r2.data as { done?: number; total?: number };
-        const verifyTotal = d2.total ?? total;
-        offset += d2.done ?? 0;
-        setLeadPipelineMessage(`Step 2/3: Verifying email addresses… ${offset.toLocaleString()} / ${verifyTotal.toLocaleString()}`);
-        if (d2.done === 0 || offset >= verifyTotal) break;
+        stepIndex++;
       }
 
-      // Step 3/3: Classify — assign persona & vertical per lead
-      setLeadPipelineMessage("Step 3/3: Classifying leads (persona & vertical)… (starting)");
-      offset = 0;
-      while (true) {
-        const res3 = await fetch("/api/leads/classify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 300 }),
-        });
-        const r3 = await parsePrepareResponse(res3);
-        if (!r3.ok) {
-          setLeadsError(r3.errorMessage || "Classify failed");
-          setPrepareLeadsLoading(false);
-          return;
+      if (doClassify) {
+        setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[2]}… (starting)`);
+        offset = 0;
+        while (true) {
+          const res3 = await fetch("/api/leads/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 300 }),
+          });
+          const r3 = await parsePrepareResponse(res3);
+          if (!r3.ok) {
+            setLeadsError(r3.errorMessage || "Classify failed");
+            setPrepareLeadsLoading(false);
+            return;
+          }
+          const d3 = r3.data as { done?: number; total?: number };
+          const classifyTotal = d3.total ?? total;
+          offset += d3.done ?? 0;
+          const pct3 = classifyTotal > 0 ? Math.round((offset / classifyTotal) * 100) : 0;
+          setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[2]}… ${offset.toLocaleString()} / ${classifyTotal.toLocaleString()} (${pct3}%)`);
+          if (d3.done === 0 || offset >= classifyTotal) break;
         }
-        const d3 = r3.data as { done?: number; total?: number };
-        const classifyTotal = d3.total ?? total;
-        offset += d3.done ?? 0;
-        setLeadPipelineMessage(`Step 3/3: Classifying leads… ${offset.toLocaleString()} / ${classifyTotal.toLocaleString()}`);
-        if (d3.done === 0 || offset >= classifyTotal) break;
       }
 
-      setLeadPipelineMessage(`Done. Personalized, verified, and classified ${total.toLocaleString()} leads.`);
+      const parts = ["Personalized"];
+      if (doVerify) parts.push("verified");
+      if (doClassify) parts.push("classified");
+      setLeadPipelineMessage(`Done. ${parts.join(" and ")} ${total.toLocaleString()} leads.`);
       const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
       setLeads(list.leads ?? []);
     } catch (e) {
@@ -661,6 +691,10 @@ export default function DashboardPage() {
     } finally {
       setPrepareLeadsLoading(false);
     }
+  };
+
+  const handlePrepareLeads = () => {
+    setShowPrepareOptionsModal(true);
   };
 
   const handleDeleteBatch = async () => {
@@ -687,6 +721,20 @@ export default function DashboardPage() {
       setLeadsError("Delete failed.");
     } finally {
       setDeleteBatchLoading(false);
+    }
+  };
+
+  const handlePauseCampaign = async (sentCampaignId: string) => {
+    setPausingCampaignId(sentCampaignId);
+    try {
+      const res = await fetch(`/api/instantly/sent-campaigns/${sentCampaignId}/pause`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to pause");
+      setPausedCampaignIds((prev) => new Set(prev).add(sentCampaignId));
+    } catch (e) {
+      setLeadsError(e instanceof Error ? e.message : "Failed to pause campaign");
+    } finally {
+      setPausingCampaignId(null);
     }
   };
 
@@ -1360,7 +1408,7 @@ export default function DashboardPage() {
                       onClick={handlePrepareLeads}
                       disabled={prepareLeadsLoading || !selectedBatchId || !playbookData.playbookApproved}
                       className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                      title={!playbookData.playbookApproved ? "Save and approve playbook first" : "1) Personalize — AI writes each lead’s sequence. 2) Verify — check email domains. 3) Classify — persona & vertical. Progress shown below."}
+                      title={!playbookData.playbookApproved ? "Save and approve playbook first" : "Choose which steps to run: personalize, verify, classify."}
                     >
                       {prepareLeadsLoading ? "Preparing..." : "Prepare leads"}
                     </button>
@@ -1422,35 +1470,78 @@ export default function DashboardPage() {
                         )}
                       </div>
                       {instantlyAccounts.length > 0 && (
-                        <div className="max-h-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
-                          {instantlyAccounts.slice(0, 500).map((acc) => {
-                            const isAll = selectedAccountEmails === null;
-                            const checked = isAll || (Array.isArray(selectedAccountEmails) && selectedAccountEmails.includes(acc.email));
+                        <>
+                          <input
+                            type="text"
+                            placeholder="Filter by email or domain…"
+                            value={accountFilter}
+                            onChange={(e) => setAccountFilter(e.target.value)}
+                            className="mb-2 w-full rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                          {(() => {
+                            const filterLower = accountFilter.trim().toLowerCase();
+                            const filtered = filterLower
+                              ? instantlyAccounts.filter((a) => a.email.toLowerCase().includes(filterLower) || (a.email.includes("@") && a.email.split("@")[1]?.toLowerCase().includes(filterLower)))
+                              : instantlyAccounts;
+                            const byDomain = new Map<string, string[]>();
+                            for (const a of filtered) {
+                              const d = a.email.includes("@") ? a.email.split("@")[1] : "";
+                              if (d) {
+                                if (!byDomain.has(d)) byDomain.set(d, []);
+                                byDomain.get(d)!.push(a.email);
+                              }
+                            }
+                            const domains = Array.from(byDomain.entries()).sort((a, b) => a[0].localeCompare(b[0]));
                             return (
-                              <label key={acc.email} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-1 py-0.5">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {
-                                    if (selectedAccountEmails === null) {
-                                      setSelectedAccountEmails(instantlyAccounts.map((a) => a.email).filter((e) => e !== acc.email));
-                                    } else if (selectedAccountEmails.includes(acc.email)) {
-                                      setSelectedAccountEmails(selectedAccountEmails.filter((e) => e !== acc.email));
-                                    } else {
-                                      setSelectedAccountEmails([...selectedAccountEmails, acc.email]);
-                                    }
-                                  }}
-                                  className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
-                                />
-                                <span className="truncate">{acc.email}</span>
-                                {acc.warmup_status !== 1 && <span className="text-xs text-zinc-500">(warmup)</span>}
-                              </label>
+                              <>
+                                {domains.length > 0 && domains.length <= 30 && (
+                                  <div className="mb-2 flex flex-wrap gap-1.5">
+                                    {domains.map(([domain, emails]) => (
+                                      <button
+                                        key={domain}
+                                        type="button"
+                                        onClick={() => setSelectedAccountEmails(emails)}
+                                        className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                                        title={`Select ${emails.length} @${domain}`}
+                                      >
+                                        @{domain} ({emails.length})
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="max-h-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
+                                  {filtered.slice(0, 500).map((acc) => {
+                                    const isAll = selectedAccountEmails === null;
+                                    const checked = isAll || (Array.isArray(selectedAccountEmails) && selectedAccountEmails.includes(acc.email));
+                                    return (
+                                      <label key={acc.email} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-1 py-0.5">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => {
+                                            if (selectedAccountEmails === null) {
+                                              setSelectedAccountEmails(instantlyAccounts.map((a) => a.email).filter((e) => e !== acc.email));
+                                            } else if (selectedAccountEmails.includes(acc.email)) {
+                                              setSelectedAccountEmails(selectedAccountEmails.filter((e) => e !== acc.email));
+                                            } else {
+                                              setSelectedAccountEmails([...selectedAccountEmails, acc.email]);
+                                            }
+                                          }}
+                                          className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="truncate">{acc.email}</span>
+                                        {acc.warmup_status !== 1 && <span className="text-xs text-zinc-500">(warmup)</span>}
+                                      </label>
+                                    );
+                                  })}
+                                  {filtered.length > 500 && (
+                                    <p className="text-xs text-zinc-500 pt-1">Showing first 500 of {filtered.length}. Use filter or &quot;Use all accounts&quot;.</p>
+                                  )}
+                                </div>
+                              </>
                             );
-                          })}
-                          {instantlyAccounts.length > 500 && (
-                            <p className="text-xs text-zinc-500 pt-1">Showing first 500. Use &quot;Use all accounts&quot; or filter in Instantly.</p>
-                          )}
-                        </div>
+                          })()}
+                        </>
                       )}
                       {instantlyAccounts.length === 0 && (
                         <p className="text-xs text-zinc-500">No accounts yet. Add them in Instantly or use Domains & inboxes below.</p>
@@ -1530,8 +1621,91 @@ export default function DashboardPage() {
                 {leadsError && (
                   <div className="mt-3 rounded-md bg-red-900/20 border border-red-800 px-3 py-2 text-sm text-red-300">{leadsError}</div>
                 )}
+                {showPrepareOptionsModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowPrepareOptionsModal(false)}>
+                    <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-6 shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+                      <h3 className="text-lg font-medium text-zinc-200">Prepare options</h3>
+                      <p className="mt-1 text-sm text-zinc-500">Choose which steps to run. Personalization is always included.</p>
+                      <ul className="mt-4 space-y-3">
+                        <li className="text-sm text-zinc-300">✓ Personalize emails — AI writes each lead’s sequence (always runs)</li>
+                        <li className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="prepare-verify"
+                            checked={prepareDoVerify}
+                            onChange={(e) => setPrepareDoVerify(e.target.checked)}
+                            className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                          />
+                          <label htmlFor="prepare-verify" className="text-sm text-zinc-300 cursor-pointer">Verify email addresses (check domains)</label>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="prepare-classify"
+                            checked={prepareDoClassify}
+                            onChange={(e) => setPrepareDoClassify(e.target.checked)}
+                            className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                          />
+                          <label htmlFor="prepare-classify" className="text-sm text-zinc-300 cursor-pointer">Classify leads (persona & vertical)</label>
+                        </li>
+                      </ul>
+                      <div className="mt-6 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowPrepareOptionsModal(false)}
+                          className="rounded border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPrepareOptionsModal(false);
+                            runPrepareWithOptions(prepareDoVerify, prepareDoClassify);
+                          }}
+                          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+                        >
+                          Start
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {leads.length > 0 && (
                   <div className="mt-6 overflow-x-auto">
+                    {(() => {
+                      const totalPages = Math.max(1, Math.ceil(leads.length / LEADS_PER_PAGE));
+                      const page = Math.min(Math.max(1, leadsPage), totalPages);
+                      const start = (page - 1) * LEADS_PER_PAGE;
+                      const pageLeads = leads.slice(start, start + LEADS_PER_PAGE);
+                      return (
+                        <>
+                          <div className="flex items-center justify-between gap-4 mb-3">
+                            <p className="text-sm text-zinc-500">
+                              Showing {start + 1}–{Math.min(start + LEADS_PER_PAGE, leads.length)} of {leads.length.toLocaleString()} leads
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setLeadsPage((p) => Math.max(1, p - 1))}
+                                disabled={page <= 1}
+                                className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
+                              >
+                                Previous
+                              </button>
+                              <span className="text-sm text-zinc-400">
+                                Page {page} of {totalPages}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setLeadsPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={page >= totalPages}
+                                className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          </div>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-zinc-700 text-left text-zinc-400">
@@ -1545,7 +1719,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {leads.map((lead) => (
+                        {pageLeads.map((lead) => (
                           <React.Fragment key={lead.id}>
                             <tr className="border-b border-zinc-800 hover:bg-zinc-800/30">
                               <td className="py-2 pr-4 text-zinc-200">{lead.email}</td>
@@ -1580,6 +1754,9 @@ export default function DashboardPage() {
                         ))}
                       </tbody>
                     </table>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1588,21 +1765,60 @@ export default function DashboardPage() {
             {(playbookData.playbookApproved || editingSteps.length > 0) && (
               <div className="card p-6">
                 <h2 className="text-lg font-medium text-zinc-200">Campaign performance</h2>
-                <p className="mt-1 text-sm text-zinc-500">Opens, clicks, and suggestions for campaigns you sent to Instantly.</p>
+                <p className="mt-1 text-sm text-zinc-500">Monitor and pause campaigns sent to Instantly. Select one below for opens, clicks, and replies.</p>
                 {sentCampaigns.length === 0 ? (
-                  <p className="mt-4 text-sm text-zinc-500">No campaigns sent yet. Send a batch to Instantly to see performance here.</p>
+                  <p className="mt-4 text-sm text-zinc-500">No campaigns sent yet. Send a batch to Instantly to see them here.</p>
                 ) : (
                   <div className="mt-4 space-y-4">
+                    <div className="overflow-x-auto rounded border border-zinc-700">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-zinc-700 text-left text-zinc-400">
+                            <th className="pb-2 pr-4 pt-2 pl-3">Campaign</th>
+                            <th className="pb-2 pr-4 pt-2">Created</th>
+                            <th className="pb-2 pr-4 pt-2">Status</th>
+                            <th className="pb-2 pr-3 pt-2 w-24"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sentCampaigns.map((c) => {
+                            const isPaused = pausedCampaignIds.has(c.id);
+                            return (
+                              <tr key={c.id} className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                                <td className="py-2 pr-4 pl-3 text-zinc-200">{c.name}</td>
+                                <td className="py-2 pr-4 text-zinc-400">{new Date(c.createdAt).toLocaleDateString()}</td>
+                                <td className="py-2 pr-4 text-zinc-400">{isPaused ? <span className="text-amber-400">Paused</span> : "Active"}</td>
+                                <td className="py-2 pr-3">
+                                  {isPaused ? (
+                                    <span className="text-xs text-zinc-500">Paused</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePauseCampaign(c.id)}
+                                      disabled={pausingCampaignId === c.id}
+                                      className="rounded border border-amber-700 bg-amber-900/40 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/60 disabled:opacity-50"
+                                    >
+                                      {pausingCampaignId === c.id ? "Pausing…" : "Pause"}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <label className="text-sm text-zinc-400">Campaign:</label>
+                      <label className="text-sm text-zinc-400">View analytics:</label>
                       <select
                         value={selectedSentCampaignId ?? ""}
                         onChange={(e) => setSelectedSentCampaignId(e.target.value || null)}
                         className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 min-w-[200px]"
                       >
+                        <option value="">Select campaign</option>
                         {sentCampaigns.map((c) => (
                           <option key={c.id} value={c.id}>
-                            {c.name} - {new Date(c.createdAt).toLocaleDateString()}
+                            {c.name} — {new Date(c.createdAt).toLocaleDateString()}
                           </option>
                         ))}
                       </select>
