@@ -65,7 +65,7 @@ export default function DashboardPage() {
   const [abTestEnabled, setAbTestEnabled] = useState(false);
   const [subjectLineA, setSubjectLineA] = useState("");
   const [subjectLineB, setSubjectLineB] = useState("");
-  const [sentCampaigns, setSentCampaigns] = useState<{ id: string; name: string; instantlyCampaignId: string; createdAt: string; abGroupId?: string | null; variant?: string | null }[]>([]);
+  const [sentCampaigns, setSentCampaigns] = useState<{ id: string; name: string; instantlyCampaignId: string; leadBatchId: string; createdAt: string; abGroupId?: string | null; variant?: string | null }[]>([]);
   const [selectedSentCampaignId, setSelectedSentCampaignId] = useState<string | null>(null);
   const [campaignAnalytics, setCampaignAnalytics] = useState<{
     emails_sent_count?: number;
@@ -197,6 +197,13 @@ export default function DashboardPage() {
       .catch(() => setLeads([]));
   }, [selectedBatchId]);
 
+  // When selecting a batch, sync selectedSentCampaignId so Stats show for that campaign if it was sent
+  useEffect(() => {
+    if (!selectedBatchId || !sentCampaigns.length) return;
+    const sent = sentCampaigns.find((s) => s.leadBatchId === selectedBatchId);
+    setSelectedSentCampaignId(sent?.id ?? null);
+  }, [selectedBatchId, sentCampaigns]);
+
   useEffect(() => {
     if (!session?.user?.id || !workspace?.domain) return;
     setInstantlyAccountsLoading(true);
@@ -222,7 +229,6 @@ export default function DashboardPage() {
       .then((res) => res.json())
       .then((data) => {
         setSentCampaigns(data.campaigns ?? []);
-        if (data.campaigns?.length && !selectedSentCampaignId) setSelectedSentCampaignId(data.campaigns[0].id);
       })
       .catch(() => setSentCampaigns([]));
   }, [session?.user?.id, playbookData.playbookApproved]);
@@ -1492,21 +1498,38 @@ export default function DashboardPage() {
                               }
                             }
                             const domains = Array.from(byDomain.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                            const allEmails = instantlyAccounts.map((a) => a.email);
+                            const currentSelection = selectedAccountEmails === null ? allEmails : selectedAccountEmails;
                             return (
                               <>
                                 {domains.length > 0 && domains.length <= 30 && (
                                   <div className="mb-2 flex flex-wrap gap-1.5">
-                                    {domains.map(([domain, emails]) => (
-                                      <button
-                                        key={domain}
-                                        type="button"
-                                        onClick={() => setSelectedAccountEmails(emails)}
-                                        className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
-                                        title={`Select ${emails.length} @${domain}`}
-                                      >
-                                        @{domain} ({emails.length})
-                                      </button>
-                                    ))}
+                                    {domains.map(([domain, emails]) => {
+                                      const domainFullySelected = emails.every((e) => currentSelection.includes(e));
+                                      const toggleDomain = () => {
+                                        if (selectedAccountEmails === null) {
+                                          setSelectedAccountEmails(emails);
+                                        } else {
+                                          const next = domainFullySelected
+                                            ? selectedAccountEmails.filter((e) => !emails.includes(e))
+                                            : [...new Set([...selectedAccountEmails, ...emails])];
+                                          if (next.length === 0) setSelectedAccountEmails([]);
+                                          else if (next.length === instantlyAccounts.length) setSelectedAccountEmails(null);
+                                          else setSelectedAccountEmails(next);
+                                        }
+                                      };
+                                      return (
+                                        <button
+                                          key={domain}
+                                          type="button"
+                                          onClick={toggleDomain}
+                                          className={`rounded border px-2 py-1 text-xs ${domainFullySelected ? "border-amber-600 bg-amber-900/50 text-amber-200" : "border-zinc-600 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`}
+                                          title={domainFullySelected ? `Unselect @${domain}` : `Add @${domain} (${emails.length})`}
+                                        >
+                                          @{domain} ({emails.length})
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 )}
                                 <div className="max-h-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
@@ -1783,12 +1806,17 @@ export default function DashboardPage() {
                         <tbody>
                           {sentCampaigns.map((c) => {
                             const isPaused = pausedCampaignIds.has(c.id);
+                            const isSelected = selectedSentCampaignId === c.id;
                             return (
-                              <tr key={c.id} className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                              <tr
+                                key={c.id}
+                                onClick={() => setSelectedSentCampaignId(isSelected ? null : c.id)}
+                                className={`border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/50 ${isSelected ? "bg-zinc-800/70" : "hover:bg-zinc-800/30"}`}
+                              >
                                 <td className="py-2 pr-4 pl-3 text-zinc-200">{c.name}</td>
                                 <td className="py-2 pr-4 text-zinc-400">{new Date(c.createdAt).toLocaleDateString()}</td>
                                 <td className="py-2 pr-4 text-zinc-400">{isPaused ? <span className="text-amber-400">Paused</span> : "Active"}</td>
-                                <td className="py-2 pr-3">
+                                <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
                                   {isPaused ? (
                                     <span className="text-xs text-zinc-500">Paused</span>
                                   ) : (
@@ -1808,21 +1836,26 @@ export default function DashboardPage() {
                         </tbody>
                       </table>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <label className="text-sm text-zinc-400">View analytics:</label>
-                      <select
-                        value={selectedSentCampaignId ?? ""}
-                        onChange={(e) => setSelectedSentCampaignId(e.target.value || null)}
-                        className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 min-w-[200px]"
-                      >
-                        <option value="">Select campaign</option>
-                        {sentCampaigns.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} — {new Date(c.createdAt).toLocaleDateString()}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {selectedSentCampaignId && (() => {
+                      const sel = sentCampaigns.find((c) => c.id === selectedSentCampaignId);
+                      const batch = sel?.leadBatchId && batches.find((b) => b.id === sel.leadBatchId);
+                      return batch ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setSelectedBatchId(sel.leadBatchId);
+                              const list = await fetch(`/api/leads?batchId=${sel.leadBatchId}`).then((r) => r.json());
+                              setLeads(list.leads ?? []);
+                              setLeadsPage(1);
+                            }}
+                            className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+                          >
+                            View batch leads ({batch.leadCount.toLocaleString()})
+                          </button>
+                        </div>
+                      ) : null;
+                    })()}
                     {analyticsLoading ? (
                       <p className="text-sm text-zinc-500">Loading analytics...</p>
                     ) : campaignAnalytics && abPartnerAnalytics ? (() => {
