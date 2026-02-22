@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       .map((s, i) => `Step ${i + 1} subject: ${s.subject}\nStep ${i + 1} body: ${s.body}`)
       .join("\n\n");
 
-    async function personalizeOne(lead: (typeof chunk)[0]) {
+    const personalizeOne = async (lead: (typeof chunk)[0]) => {
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
         const parts: string[] = [];
@@ -185,7 +185,7 @@ Example: {${stepExample}}`;
           data: fallback,
         });
       }
-    }
+    };
 
     await Promise.all(chunk.map(personalizeOne));
 
