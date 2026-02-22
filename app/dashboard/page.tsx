@@ -135,6 +135,8 @@ export default function DashboardPage() {
   const [showPrepareOptionsModal, setShowPrepareOptionsModal] = useState(false);
   const [prepareDoVerify, setPrepareDoVerify] = useState(true);
   const [prepareDoClassify, setPrepareDoClassify] = useState(true);
+  /** Current step percent (0–100) for progress bar during Prepare. */
+  const [prepareProgressPct, setPrepareProgressPct] = useState<number | null>(null);
   const [instantlyAdvancedOpen, setInstantlyAdvancedOpen] = useState(false);
   const INSTANTLY_ACCOUNTS_PAGE_SIZE = 10;
 
@@ -176,7 +178,6 @@ export default function DashboardPage() {
         .then((res) => res.json())
         .then((data) => {
           setBatches(data.batches ?? []);
-          if (data.batches?.length && !selectedBatchId) setSelectedBatchId(data.batches[0].id);
         })
         .catch(() => {});
     }
@@ -606,6 +607,7 @@ export default function DashboardPage() {
     setPrepareLeadsLoading(true);
     setLeadsError("");
     setLeadPipelineMessage(null);
+    setPrepareProgressPct(0);
     const steps = [true, doVerify, doClassify];
     const stepLabels = ["Personalizing emails", "Verifying email addresses", "Classifying leads"];
     const totalSteps = steps.filter(Boolean).length;
@@ -632,7 +634,12 @@ export default function DashboardPage() {
         total = d1.total ?? 0;
         offset += d1.done ?? 0;
         const pct1 = total > 0 ? Math.round((offset / total) * 100) : 0;
+        setPrepareProgressPct(pct1);
         setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[0]}… ${offset.toLocaleString()} / ${total.toLocaleString()} (${pct1}%)`);
+        try {
+          const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
+          setLeads(list.leads ?? []);
+        } catch {}
         if (d1.done === 0 || offset >= total) break;
       }
       stepIndex++;
@@ -656,7 +663,12 @@ export default function DashboardPage() {
           const verifyTotal = d2.total ?? total;
           offset += d2.done ?? 0;
           const pct2 = verifyTotal > 0 ? Math.round((offset / verifyTotal) * 100) : 0;
+          setPrepareProgressPct(pct2);
           setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[1]}… ${offset.toLocaleString()} / ${verifyTotal.toLocaleString()} (${pct2}%)`);
+          try {
+            const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
+            setLeads(list.leads ?? []);
+          } catch {}
           if (d2.done === 0 || offset >= verifyTotal) break;
         }
         stepIndex++;
@@ -681,11 +693,17 @@ export default function DashboardPage() {
           const classifyTotal = d3.total ?? total;
           offset += d3.done ?? 0;
           const pct3 = classifyTotal > 0 ? Math.round((offset / classifyTotal) * 100) : 0;
+          setPrepareProgressPct(pct3);
           setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[2]}… ${offset.toLocaleString()} / ${classifyTotal.toLocaleString()} (${pct3}%)`);
+          try {
+            const list = await fetch(`/api/leads?batchId=${selectedBatchId}`).then((r) => r.json());
+            setLeads(list.leads ?? []);
+          } catch {}
           if (d3.done === 0 || offset >= classifyTotal) break;
         }
       }
 
+      setPrepareProgressPct(100);
       const parts = ["Personalized"];
       if (doVerify) parts.push("verified");
       if (doClassify) parts.push("classified");
@@ -696,6 +714,7 @@ export default function DashboardPage() {
       setLeadsError(e instanceof Error ? e.message : "Prepare failed.");
     } finally {
       setPrepareLeadsLoading(false);
+      setPrepareProgressPct(null);
     }
   };
 
@@ -1308,14 +1327,45 @@ export default function DashboardPage() {
             )}
 
             {(playbookData.playbookApproved || editingSteps.length > 0) && (
+              <>
               <div className="card p-6">
-                {!playbookData.playbookApproved && editingSteps.length > 0 && (
-                  <div className="mb-4 rounded-md border border-amber-800 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
-                    Playbook has unsaved edits. Click &quot;Save edits&quot; then &quot;Approve playbook&quot; to use this sequence for sending.
+                <h2 className="text-lg font-medium text-zinc-200">Campaigns</h2>
+                <p className="mt-1 text-sm text-zinc-500">Select a campaign to view leads, prepare, and send — or create one by adding leads below.</p>
+                {batches.length > 0 ? (
+                  <div className="mt-4 overflow-x-auto rounded border border-zinc-700">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-700 text-left text-zinc-400">
+                          <th className="pb-2 pr-4 pt-2 pl-3">Campaign</th>
+                          <th className="pb-2 pr-4 pt-2">Leads</th>
+                          <th className="pb-2 pr-4 pt-2">Status</th>
+                          <th className="pb-2 pt-2">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {batches.map((b) => {
+                          const isSent = sentCampaigns.some((s) => s.leadBatchId === b.id);
+                          return (
+                            <tr
+                              key={b.id}
+                              onClick={() => setSelectedBatchId(b.id)}
+                              className={`border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/50 ${selectedBatchId === b.id ? "bg-zinc-800/70" : ""}`}
+                            >
+                              <td className="py-2 pr-4 pl-3 text-zinc-200">{b.name ?? "Unnamed"}</td>
+                              <td className="py-2 pr-4 text-zinc-400">{b.leadCount.toLocaleString()}</td>
+                              <td className="py-2 pr-4 text-zinc-400">{isSent ? <span className="text-emerald-400">Sent</span> : "Draft"}</td>
+                              <td className="py-2 text-zinc-500 text-xs">{new Date(b.createdAt).toLocaleDateString()}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
+                ) : (
+                  <p className="mt-4 text-sm text-zinc-500">No campaigns yet. Add leads below to create one.</p>
                 )}
-                <h2 className="text-lg font-medium text-zinc-200">Leads & personalized emails</h2>
-                <p className="mt-1 text-sm text-zinc-500">Upload CSV, or import from Google Sheet or API. Columns: email, name, company, job title, industry (email required).</p>
+                <h3 className="mt-6 text-sm font-medium text-zinc-300">Create campaign (add leads)</h3>
+                <p className="mt-1 text-sm text-zinc-500">Upload CSV or import from Google Sheet or API. Columns: email, name, company, job title, industry (email required).</p>
                 <div className="mt-4 flex flex-wrap gap-3 items-end">
                   <label className="rounded-md border border-zinc-600 px-4 py-2 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800">
                     Choose CSV
@@ -1378,9 +1428,20 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {selectedBatchId ? (
+              <div className="card p-6">
+                {!playbookData.playbookApproved && editingSteps.length > 0 && (
+                  <div className="mb-4 rounded-md border border-amber-800 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
+                    Playbook has unsaved edits. Click &quot;Save edits&quot; then &quot;Approve playbook&quot; to use this sequence for sending.
+                  </div>
+                )}
+                <h2 className="text-lg font-medium text-zinc-200">Campaign detail</h2>
+                <p className="mt-1 text-sm text-zinc-500">Leads, prepare, send, and stats for the selected campaign.</p>
                 {batches.length > 0 && (
                   <div className="mt-6 flex flex-wrap gap-4 items-center">
-                    <span className="text-sm text-zinc-400">Batch:</span>
+                    <span className="text-sm text-zinc-400">Campaign:</span>
                     <select
                       value={selectedBatchId ?? ""}
                       onChange={(e) => setSelectedBatchId(e.target.value || null)}
@@ -1608,6 +1669,14 @@ export default function DashboardPage() {
                 {(leadPipelineMessage || prepareLeadsLoading) && (
                   <div className="mt-3 rounded-md bg-zinc-800/80 border border-zinc-700 px-3 py-2 text-sm text-zinc-300">
                     {leadPipelineMessage ?? "Preparing…"}
+                    {prepareLeadsLoading && prepareProgressPct != null && (
+                      <div className="mt-2 w-full rounded-full bg-zinc-700 h-2.5 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                          style={{ width: `${prepareProgressPct}%` }}
+                        />
+                      </div>
+                    )}
                     {prepareLeadsLoading && (
                       <p className="mt-1.5 text-xs text-zinc-500">
                         Steps: 1) Personalize emails per lead · 2) Verify email domains · 3) Classify persona & vertical
@@ -1783,6 +1852,12 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+              ) : (
+                <div className="card p-6">
+                  <p className="text-sm text-zinc-500">Select a campaign from the table above or create one by adding leads.</p>
+                </div>
+              )}
+              </>
             )}
 
             {(playbookData.playbookApproved || editingSteps.length > 0) && (

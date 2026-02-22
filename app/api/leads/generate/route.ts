@@ -41,10 +41,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Batch not found" }, { status: 404 });
     }
 
-    const total = batch.leads.length;
-    const chunk = batch.leads.slice(offset, offset + limit);
+    // Only process leads that don't have personalized steps yet (resume without redoing)
+    const needsWork = batch.leads.filter((l) => !l.stepsJson || l.stepsJson.trim() === "" || l.stepsJson === "[]");
+    const total = needsWork.length;
+    const chunk = needsWork.slice(offset, offset + limit);
     if (chunk.length === 0) {
-      return NextResponse.json({ done: 0, total, message: "No leads in range." });
+      return NextResponse.json({ done: 0, total, message: total === 0 ? "No leads to personalize." : "No leads in range." });
     }
 
     let playbook: { steps: Array<{ subject: string; body: string; delayDays: number }> };

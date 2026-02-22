@@ -46,10 +46,12 @@ export async function POST(request: Request) {
     }
 
     const anthropicKey = decrypt(workspace.anthropicKey);
-    const leads = batch.leads.slice(offset, offset + limit);
-    const total = batch.leads.length;
+    // Only process leads not yet classified (resume without redoing)
+    const needsWork = batch.leads.filter((l) => !l.persona || !l.vertical);
+    const total = needsWork.length;
+    const leads = needsWork.slice(offset, offset + limit);
     if (leads.length === 0) {
-      return NextResponse.json({ done: 0, total, classified: 0, message: "No leads in range." });
+      return NextResponse.json({ done: 0, total, classified: 0, message: total === 0 ? "All leads already classified." : "No leads in range." });
     }
 
     let classified = 0;
