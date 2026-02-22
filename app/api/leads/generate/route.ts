@@ -23,8 +23,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
     const offset = Math.max(0, Number(offsetParam) || 0);
-    // Process leads in parallel (Promise.all). 6 at a time ≈ one round-trip of Anthropic (~15–25s) to stay under timeout.
-    const CHUNK_SIZE = 6;
+    // Tiny chunks: each lead = 1 Anthropic call (~3–5s). 2 leads ≈ 6–10s to stay under Vercel timeout.
+    const CHUNK_SIZE = 2;
     const limit = Math.min(CHUNK_SIZE, Math.max(1, Number(limitParam) || CHUNK_SIZE));
 
     const workspace = await prisma.workspace.findUnique({
@@ -68,7 +68,6 @@ export async function POST(request: Request) {
     const stepExample = steps.map((_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
 
     const anthropicKey = decrypt(workspace.anthropicKey);
-    const model = workspace.anthropicModel?.trim() || undefined;
     const productSummary = workspace.productSummary ?? "";
     const icp = workspace.icp ?? "";
 
@@ -95,7 +94,7 @@ export async function POST(request: Request) {
       .map((s, i) => `Step ${i + 1} subject: ${s.subject}\nStep ${i + 1} body: ${s.body}`)
       .join("\n\n");
 
-    const personalizeOne = async (lead: (typeof chunk)[0]) => {
+    for (const lead of chunk) {
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
         const parts: string[] = [];
@@ -131,10 +130,7 @@ Respond with ONLY a valid JSON object with keys ${stepKeys} (only include steps 
 Example: {${stepExample}}`;
 
       try {
-        const { text: raw, usage: oneUsage } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400, model });
-        if (oneUsage) {
-          (lead as { _usage?: { input_tokens: number; output_tokens: number } })._usage = oneUsage;
-        }
+        const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400 });
         let jsonStr = raw.trim();
         const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlock) jsonStr = codeBlock[1].trim();
@@ -185,27 +181,11 @@ Example: {${stepExample}}`;
           data: fallback,
         });
       }
-    };
-
-    await Promise.all(chunk.map(personalizeOne));
-
-    const totalUsage = chunk.reduce(
-      (acc, l) => {
-        const u = (l as { _usage?: { input_tokens: number; output_tokens: number } })._usage;
-        if (u) {
-          acc.input_tokens += u.input_tokens;
-          acc.output_tokens += u.output_tokens;
-        }
-        return acc;
-      },
-      { input_tokens: 0, output_tokens: 0 }
-    );
+    }
 
     return NextResponse.json({
       done: chunk.length,
       total,
-      leadIds: chunk.map((l) => l.id),
-      usage: totalUsage.input_tokens + totalUsage.output_tokens > 0 ? totalUsage : undefined,
       message: `Personalized ${chunk.length} lead(s), ${steps.length} steps each.`,
     });
   } catch (error: any) {

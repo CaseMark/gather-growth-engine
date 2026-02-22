@@ -7,7 +7,6 @@ import React, { useState, useEffect } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
-import { ANTHROPIC_MODELS } from "@/lib/anthropic";
 
 export default function DashboardPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
@@ -138,12 +137,6 @@ export default function DashboardPage() {
   const [prepareDoClassify, setPrepareDoClassify] = useState(true);
   /** Current step percent (0–100) for progress bar during Prepare. */
   const [prepareProgressPct, setPrepareProgressPct] = useState<number | null>(null);
-  /** When true, create Instantly campaign at start and push each personalized chunk. */
-  const [preparePushAsWeGo, setPreparePushAsWeGo] = useState(false);
-  /** Campaign ID when pushing as we go (set after create-campaign). */
-  const [preparePushCampaignId, setPreparePushCampaignId] = useState<string | null>(null);
-  /** Token usage during this Prepare run (accumulated from generate + classify). */
-  const [prepareTokens, setPrepareTokens] = useState({ input: 0, output: 0 });
   const [instantlyAdvancedOpen, setInstantlyAdvancedOpen] = useState(false);
   const INSTANTLY_ACCOUNTS_PAGE_SIZE = 10;
 
@@ -609,47 +602,18 @@ export default function DashboardPage() {
     }
   };
 
-  const runPrepareWithOptions = async (doVerify: boolean, doClassify: boolean, pushAsWeGo: boolean) => {
+  const runPrepareWithOptions = async (doVerify: boolean, doClassify: boolean) => {
     if (!selectedBatchId) return;
-    if (pushAsWeGo && !campaignNameInput?.trim()) {
-      setLeadsError("Set a campaign name in the Send to Instantly section below to push as we go.");
-      return;
-    }
     setPrepareLeadsLoading(true);
     setLeadsError("");
     setLeadPipelineMessage(null);
     setPrepareProgressPct(0);
-    setPrepareTokens({ input: 0, output: 0 });
-    setPreparePushCampaignId(null);
-    let activePushCampaignId: string | null = null;
+    const steps = [true, doVerify, doClassify];
+    const stepLabels = ["Personalizing emails", "Verifying email addresses", "Classifying leads"];
+    const totalSteps = steps.filter(Boolean).length;
+    let stepIndex = 0;
     try {
-      if (pushAsWeGo) {
-        setLeadPipelineMessage("Creating Instantly campaign…");
-        const createRes = await fetch("/api/instantly/create-campaign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            batchId: selectedBatchId,
-            campaignName: campaignNameInput?.trim(),
-            accountEmails: selectedAccountEmails ?? undefined,
-          }),
-        });
-        const createData = await createRes.json().catch(() => ({}));
-        if (!createRes.ok) {
-          setLeadsError(createData.error ?? "Failed to create Instantly campaign");
-          setPrepareLeadsLoading(false);
-          return;
-        }
-        activePushCampaignId = createData.campaignId ?? null;
-        setPreparePushCampaignId(activePushCampaignId);
-      }
-
-      const steps = [true, doVerify, doClassify];
-      const stepLabels = ["Personalizing emails", "Verifying email addresses", "Classifying leads"];
-      const totalSteps = steps.filter(Boolean).length;
-      let stepIndex = 0;
       let total = 0;
-      let tokensAcc = { input: 0, output: 0 };
 
       // Step 1: Personalize — AI writes each lead's email sequence (small chunks to avoid function timeout)
       setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[0]}… (starting)`);
@@ -658,7 +622,7 @@ export default function DashboardPage() {
         const res1 = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 6 }),
+          body: JSON.stringify({ batchId: selectedBatchId, offset, limit: 2 }),
         });
         const r1 = await parsePrepareResponse(res1);
         if (!r1.ok) {
@@ -666,32 +630,9 @@ export default function DashboardPage() {
           setPrepareLeadsLoading(false);
           return;
         }
-        const d1 = r1.data as { done?: number; total?: number; leadIds?: string[]; usage?: { input_tokens?: number; output_tokens?: number } };
+        const d1 = r1.data as { done?: number; total?: number };
         total = d1.total ?? 0;
         offset += d1.done ?? 0;
-        if (d1.usage) {
-          tokensAcc.input += d1.usage.input_tokens ?? 0;
-          tokensAcc.output += d1.usage.output_tokens ?? 0;
-          setPrepareTokens((t) => ({
-            input: t.input + (d1.usage!.input_tokens ?? 0),
-            output: t.output + (d1.usage!.output_tokens ?? 0),
-          }));
-        }
-        if (activePushCampaignId && d1.leadIds?.length) {
-          try {
-            await fetch("/api/instantly/add-leads", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                campaignId: activePushCampaignId,
-                batchId: selectedBatchId,
-                leadIds: d1.leadIds,
-              }),
-            });
-          } catch {
-            // non-fatal: continue prepare
-          }
-        }
         const pct1 = total > 0 ? Math.round((offset / total) * 100) : 0;
         setPrepareProgressPct(pct1);
         setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[0]}… ${offset.toLocaleString()} / ${total.toLocaleString()} (${pct1}%)`);
@@ -748,21 +689,9 @@ export default function DashboardPage() {
             setPrepareLeadsLoading(false);
             return;
           }
-          const d3 = r3.data as {
-            done?: number;
-            total?: number;
-            usage?: { input_tokens?: number; output_tokens?: number };
-          };
+          const d3 = r3.data as { done?: number; total?: number };
           const classifyTotal = d3.total ?? total;
           offset += d3.done ?? 0;
-          if (d3.usage) {
-            tokensAcc.input += d3.usage.input_tokens ?? 0;
-            tokensAcc.output += d3.usage.output_tokens ?? 0;
-            setPrepareTokens((t) => ({
-              input: t.input + (d3.usage!.input_tokens ?? 0),
-              output: t.output + (d3.usage!.output_tokens ?? 0),
-            }));
-          }
           const pct3 = classifyTotal > 0 ? Math.round((offset / classifyTotal) * 100) : 0;
           setPrepareProgressPct(pct3);
           setLeadPipelineMessage(`Step ${stepIndex + 1}/${totalSteps}: ${stepLabels[2]}… ${offset.toLocaleString()} / ${classifyTotal.toLocaleString()} (${pct3}%)`);
@@ -786,19 +715,6 @@ export default function DashboardPage() {
     } finally {
       setPrepareLeadsLoading(false);
       setPrepareProgressPct(null);
-    }
-  };
-
-  const handleSaveModel = async (modelId: string) => {
-    try {
-      await fetch("/api/workspace", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anthropicModel: modelId || null }),
-      });
-      setWorkspace((w: any) => (w ? { ...w, anthropicModel: modelId || null } : w));
-    } catch {
-      setLeadsError("Failed to save model preference.");
     }
   };
 
@@ -1547,21 +1463,6 @@ export default function DashboardPage() {
                         className="min-w-[200px] rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                       />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-zinc-400 whitespace-nowrap">AI model:</span>
-                      <select
-                        value={workspace?.anthropicModel ?? ANTHROPIC_MODELS[0].id}
-                        onChange={(e) => handleSaveModel(e.target.value)}
-                        className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 min-w-[200px]"
-                        title="Choose which Claude model to use for personalization and classification (affects cost)"
-                      >
-                        {ANTHROPIC_MODELS.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                     <button
                       onClick={handleDeleteBatch}
                       disabled={deleteBatchLoading || !selectedBatchId}
@@ -1586,11 +1487,6 @@ export default function DashboardPage() {
                     >
                       {sendingToInstantly ? "Sending..." : "Send to Instantly"}
                     </button>
-                  </div>
-                )}
-                {batches.length > 0 && (
-                  <div className="mt-3 flex items-center gap-4 text-sm text-zinc-400">
-                    <span>Token usage (this session): {prepareTokens.input.toLocaleString()} in / {prepareTokens.output.toLocaleString()} out</span>
                   </div>
                 )}
                 {batches.length > 0 && (
@@ -1781,9 +1677,6 @@ export default function DashboardPage() {
                         />
                       </div>
                     )}
-                    <p className="mt-1.5 text-xs text-zinc-400">
-                      Tokens: {prepareTokens.input.toLocaleString()} in / {prepareTokens.output.toLocaleString()} out
-                    </p>
                     {prepareLeadsLoading && (
                       <p className="mt-1.5 text-xs text-zinc-500">
                         Steps: 1) Personalize emails per lead · 2) Verify email domains · 3) Classify persona & vertical
@@ -1825,57 +1718,29 @@ export default function DashboardPage() {
                     <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-6 shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
                       <h3 className="text-lg font-medium text-zinc-200">Prepare options</h3>
                       <p className="mt-1 text-sm text-zinc-500">Choose which steps to run. Personalization is always included.</p>
-                      <div className="mt-4 space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-zinc-400 mb-1">AI model (cost)</label>
-                          <select
-                            value={workspace?.anthropicModel ?? ANTHROPIC_MODELS[0].id}
-                            onChange={(e) => handleSaveModel(e.target.value)}
-                            className="w-full rounded-md border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                          >
-                            {ANTHROPIC_MODELS.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <ul className="space-y-3">
-                          <li className="text-sm text-zinc-300">✓ Personalize emails — AI writes each lead’s sequence (always runs)</li>
-                          <li className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              id="prepare-verify"
-                              checked={prepareDoVerify}
-                              onChange={(e) => setPrepareDoVerify(e.target.checked)}
-                              className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
-                            />
-                            <label htmlFor="prepare-verify" className="text-sm text-zinc-300 cursor-pointer">Verify email addresses (check domains)</label>
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              id="prepare-classify"
-                              checked={prepareDoClassify}
-                              onChange={(e) => setPrepareDoClassify(e.target.checked)}
-                              className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
-                            />
-                            <label htmlFor="prepare-classify" className="text-sm text-zinc-300 cursor-pointer">Classify leads (persona & vertical)</label>
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              id="prepare-push-as-we-go"
-                              checked={preparePushAsWeGo}
-                              onChange={(e) => setPreparePushAsWeGo(e.target.checked)}
-                              className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
-                            />
-                            <label htmlFor="prepare-push-as-we-go" className="text-sm text-zinc-300 cursor-pointer">
-                              Push to Instantly as we go (uses campaign name from Send section below)
-                            </label>
-                          </li>
-                        </ul>
-                      </div>
+                      <ul className="mt-4 space-y-3">
+                        <li className="text-sm text-zinc-300">✓ Personalize emails — AI writes each lead’s sequence (always runs)</li>
+                        <li className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="prepare-verify"
+                            checked={prepareDoVerify}
+                            onChange={(e) => setPrepareDoVerify(e.target.checked)}
+                            className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                          />
+                          <label htmlFor="prepare-verify" className="text-sm text-zinc-300 cursor-pointer">Verify email addresses (check domains)</label>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="prepare-classify"
+                            checked={prepareDoClassify}
+                            onChange={(e) => setPrepareDoClassify(e.target.checked)}
+                            className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                          />
+                          <label htmlFor="prepare-classify" className="text-sm text-zinc-300 cursor-pointer">Classify leads (persona & vertical)</label>
+                        </li>
+                      </ul>
                       <div className="mt-6 flex justify-end gap-2">
                         <button
                           type="button"
@@ -1888,7 +1753,7 @@ export default function DashboardPage() {
                           type="button"
                           onClick={() => {
                             setShowPrepareOptionsModal(false);
-                            runPrepareWithOptions(prepareDoVerify, prepareDoClassify, preparePushAsWeGo);
+                            runPrepareWithOptions(prepareDoVerify, prepareDoClassify);
                           }}
                           className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
                         >

@@ -46,7 +46,6 @@ export async function POST(request: Request) {
     }
 
     const anthropicKey = decrypt(workspace.anthropicKey);
-    const model = workspace.anthropicModel?.trim() || undefined;
     // Only process leads not yet classified (resume without redoing)
     const needsWork = batch.leads.filter((l) => !l.persona || !l.vertical);
     const total = needsWork.length;
@@ -56,8 +55,6 @@ export async function POST(request: Request) {
     }
 
     let classified = 0;
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
 
     for (let i = 0; i < leads.length; i += CLASSIFY_CHUNK_SIZE) {
       const chunk = leads.slice(i, i + CLASSIFY_CHUNK_SIZE);
@@ -79,11 +76,7 @@ ${leadList}
 Respond with ONLY a valid JSON array, no other text. One object per lead in the same order as above. Each object: { "email": "...", "persona": "...", "vertical": "..." }
 Example: [{"email":"a@b.com","persona":"VP Sales","vertical":"SaaS"},...]`;
 
-      const { text: raw, usage: chunkUsage } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000, model });
-      if (chunkUsage) {
-        totalInputTokens += chunkUsage.input_tokens;
-        totalOutputTokens += chunkUsage.output_tokens;
-      }
+      const raw = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000 });
       let jsonStr = raw.trim();
       const codeBlock = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (codeBlock) jsonStr = codeBlock[1].trim();
@@ -117,10 +110,6 @@ Example: [{"email":"a@b.com","persona":"VP Sales","vertical":"SaaS"},...]`;
       done: leads.length,
       total,
       classified,
-      usage:
-        totalInputTokens + totalOutputTokens > 0
-          ? { input_tokens: totalInputTokens, output_tokens: totalOutputTokens }
-          : undefined,
       message: `Classified ${classified} leads with persona and vertical.`,
     });
   } catch (error) {

@@ -76,7 +76,7 @@ If you're not making any edits, just reply in plain text with no JSON block. If 
 
     const userPrompt = `${systemPrompt}\n\n---\n\nCurrent context:\n\n${contextBlock}\n\n---\n\nConversation:\n\n${conversationText}\n\nAssistant:`;
 
-    const { text: raw } = await callAnthropic(anthropicKey, userPrompt, { maxTokens: 2000 });
+    const raw = await callAnthropic(anthropicKey, userPrompt, { maxTokens: 2000 });
 
     let reply = raw.replace(/```(?:json)?\s*[\s\S]*?```/g, "").trim();
     let edits: { icp?: string | null; steps?: Step[] | null } | null = null;

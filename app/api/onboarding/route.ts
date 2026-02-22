@@ -77,7 +77,6 @@ export async function GET(request: Request) {
         id: true,
         domain: true,
         productSummary: true,
-        anthropicModel: true,
         createdAt: true,
         updatedAt: true,
         // Don't return encrypted keys

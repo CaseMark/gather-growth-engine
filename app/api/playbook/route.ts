@@ -196,7 +196,7 @@ ${stepsJson}
 
 Rules: stepNumber 1 to ${numSteps}. delayDays for each step: ${delays.join(", ")}. Keep subjects short and intriguing. Keep bodies concise (2-4 short paragraphs), conversational, and personalized to the ICP. Use placeholders like {{firstName}}, {{company}}, {{senderName}} where appropriate.`;
 
-    const { text: rawText } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000 });
+    const rawText = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000 });
 
     // Parse JSON from response (handle markdown code blocks)
     let jsonStr = rawText.trim();

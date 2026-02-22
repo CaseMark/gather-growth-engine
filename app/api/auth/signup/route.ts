@@ -43,24 +43,12 @@ export async function POST(request: Request) {
       },
     });
 
-    // Send verification email (in dev without RESEND_API_KEY, link is printed in terminal)
+    // Send verification email (in dev, link is printed in this terminal)
     try {
       await sendVerificationEmail(email, verificationToken, name || email);
     } catch (emailError) {
       console.error("Failed to send verification email:", emailError);
-      const message =
-        emailError instanceof Error
-          ? emailError.message
-          : "Verification email could not be sent.";
-      return NextResponse.json(
-        {
-          error:
-            message.includes("RESEND_API_KEY")
-              ? "Verification emails are not configured for this server. Please contact support."
-              : "Verification email could not be sent. Please try again or contact support.",
-        },
-        { status: 503 }
-      );
+      // Don't fail signup if email fails - user can request resend later
     }
 
     return NextResponse.json(

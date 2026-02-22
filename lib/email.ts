@@ -1,13 +1,8 @@
 // Email sending utility
-// Uses Resend API (free tier). In production, RESEND_API_KEY is required or verification emails will not send.
+// Uses Resend API (free tier) or falls back to console logging for development
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-
-function isProduction(): boolean {
-  const url = process.env.NEXTAUTH_URL ?? "";
-  return process.env.NODE_ENV === "production" || url.startsWith("https://");
-}
 
 export async function sendVerificationEmail(
   email: string,
@@ -16,14 +11,9 @@ export async function sendVerificationEmail(
 ) {
   const verificationUrl = `${process.env.NEXTAUTH_URL}/verify-email?token=${token}`;
 
-  // If Resend API key is not set
-  if (!RESEND_API_KEY?.trim()) {
-    if (isProduction()) {
-      throw new Error(
-        "Verification emails are not configured. Set RESEND_API_KEY (and optionally RESEND_FROM_EMAIL) in your deployment environment. See https://resend.com for a free API key."
-      );
-    }
-    // Local dev: log the link so you can verify without sending
+  // If Resend API key is not set, just log (for local dev)
+  if (!RESEND_API_KEY) {
+    // Use console.warn so it stands out in the terminal
     console.warn("\n" + "=".repeat(70));
     console.warn("[Email] VERIFICATION EMAIL (dev mode - not actually sent)");
     console.warn("=".repeat(70));
@@ -68,7 +58,13 @@ export async function sendVerificationEmail(
 
     return await res.json();
   } catch (error) {
-    console.error("Failed to send verification email via Resend:", error);
-    throw error;
+    console.error("Failed to send email via Resend:", error);
+    // Fall back to console logging
+    console.log("=".repeat(60));
+    console.log("[Email] VERIFICATION EMAIL (fallback - not actually sent)");
+    console.log("=".repeat(60));
+    console.log(`To: ${email}`);
+    console.log(`Verification URL: ${verificationUrl}`);
+    console.log("=".repeat(60));
   }
 }
