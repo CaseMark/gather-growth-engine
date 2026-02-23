@@ -121,6 +121,14 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
+            <p className="mt-2 text-right text-sm">
+              <Link
+                href="/forgot-password"
+                className="font-medium text-emerald-500 hover:text-emerald-400"
+              >
+                Forgot password?
+              </Link>
+            </p>
           </div>
           <button
             type="submit"

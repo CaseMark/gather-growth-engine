@@ -77,3 +77,68 @@ export async function sendVerificationEmail(
 
   return;
 }
+
+export async function sendPasswordResetEmail(
+  email: string,
+  token: string,
+  name?: string
+): Promise<void> {
+  const baseUrl = process.env.NEXTAUTH_URL;
+  if (!baseUrl) {
+    throw new Error(
+      "NEXTAUTH_URL is not set. Password reset emails require it for the link."
+    );
+  }
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+  if (!RESEND_API_KEY?.trim()) {
+    console.warn(
+      "[Email] RESEND_API_KEY is not set. Set it in Vercel (or .env) to send password reset emails."
+    );
+    throw new Error(
+      "Email is not configured. Set RESEND_API_KEY in your environment to send password reset emails."
+    );
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${RESEND_API_KEY.trim()}`,
+    },
+    body: JSON.stringify({
+      from: RESEND_FROM_HEADER,
+      to: [email],
+      subject: "Reset your password – Outbound Growth Engine",
+      html: `
+        <h2>Reset your password</h2>
+        <p>Hi ${name || "there"},</p>
+        <p>We received a request to reset your password. Click the link below to choose a new password:</p>
+        <p><a href="${resetUrl}" style="background-color: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset password</a></p>
+        <p>Or copy and paste this URL into your browser:</p>
+        <p>${resetUrl}</p>
+        <p>This link will expire in 1 hour. If you didn't request a reset, you can ignore this email.</p>
+      `,
+    }),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as { message?: string };
+  const resendMessage = typeof data?.message === "string" ? data.message : "";
+
+  if (!res.ok) {
+    const isTestingMode =
+      res.status === 403 &&
+      /only send testing emails to your own|verify a domain/i.test(resendMessage);
+    const msg = isTestingMode
+      ? "Resend is in testing mode: you can only send to your Resend account email until you verify a domain."
+      : resendMessage ||
+        (res.status === 401
+          ? "Invalid Resend API key. Check RESEND_API_KEY."
+          : res.status === 422
+            ? "Invalid from address or recipient."
+            : "Resend API error");
+    throw new Error(`Password reset email failed: ${msg}`);
+  }
+
+  return;
+}
