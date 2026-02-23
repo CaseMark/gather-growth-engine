@@ -7,8 +7,8 @@ import { prisma } from "@/lib/prisma";
 /**
  * POST /api/instantly/sent-campaigns/[id]/test
  * Body: { testEmail: string }
- * Adds one lead (test email) to the existing Instantly campaign using a lead that has step content.
- * The test recipient will get the same multi-step sequence as the original campaign.
+ * Creates a separate test campaign with minute-based delays so all emails arrive within minutes.
+ * Uses a lead that has step content from this campaign's batch.
  */
 export async function POST(
   request: Request,
@@ -67,9 +67,6 @@ export async function POST(
     if (!sent) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
-    if (!sent.instantlyCampaignId) {
-      return NextResponse.json({ error: "This campaign has no Instantly campaign ID" }, { status: 400 });
-    }
     const leads = sent.leadBatch?.leads ?? [];
     if (leads.length === 0) {
       return NextResponse.json({ error: "No leads in this campaign" }, { status: 400 });
@@ -121,8 +118,28 @@ export async function POST(
       custom_variables[`step${i + 1}_body`] = bodyWithLineBreaks(s.body ?? "").trim();
     });
 
+    // Create a separate test campaign with 2-min delays so all emails arrive within minutes
+    const sequenceSteps = steps.map((_, i) => ({
+      subject: `{{step${i + 1}_subject}}`,
+      body: `{{step${i + 1}_body}}`,
+      delayDays: i === 0 ? 0 : 2,
+    }));
+
+    const campaignName = `[TEST] ${sent.name}`;
+    const created = await ctx.client.createCampaign(campaignName, {
+      sequenceSteps,
+      delayUnit: "minutes",
+    });
+    const campaignId = created.id;
+    if (!campaignId) {
+      return NextResponse.json({ error: "Instantly did not return campaign id" }, { status: 500 });
+    }
+
+    const stepVariableNames = steps.map((_, i) => [`step${i + 1}_subject`, `step${i + 1}_body`]).flat();
+    await ctx.client.addCampaignVariables(campaignId, stepVariableNames);
+
     await ctx.client.bulkAddLeadsToCampaign(
-      sent.instantlyCampaignId,
+      campaignId,
       [
         {
           email: testEmail,
@@ -135,10 +152,12 @@ export async function POST(
       { verify_leads_on_import: false }
     );
 
+    await ctx.client.activateCampaign(campaignId);
+
     return NextResponse.json({
       success: true,
       testEmail,
-      message: `Test lead added to campaign. You will receive ${steps.length} emails at ${testEmail} (step 1 soon, then follow-ups over the next days).`,
+      message: `Test campaign created. You will receive ${steps.length} emails at ${testEmail} within minutes (step 1 immediately, then one every ~2 min). Check your inbox.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to add test lead";

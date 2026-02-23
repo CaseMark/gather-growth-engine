@@ -219,6 +219,7 @@ export async function POST(request: Request) {
     const campaignOptionsWithSequence = {
       ...(selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : {}),
       ...(sequenceSteps.length > 0 ? { sequenceSteps } : {}),
+      delayUnit: "days" as const,
     };
 
     if (abTest) {

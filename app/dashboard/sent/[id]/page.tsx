@@ -219,7 +219,7 @@ export default function SentCampaignDetailPage() {
           <section className="mb-10">
             <h2 className="text-lg font-medium text-zinc-200 mb-4">Send test to my email</h2>
             <p className="text-sm text-zinc-500 mb-3">
-              Add your email as a lead to this campaign in Instantly. You’ll receive the same multi-step sequence so you can see each email as it goes out.
+              Creates a separate test campaign with 2-min delays. You’ll receive each step as a separate email within minutes (step 1 immediately, then one every ~2 min).
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[200px]">

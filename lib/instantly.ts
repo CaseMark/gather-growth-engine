@@ -237,8 +237,10 @@ function createInstantlyClient(apiKey: string) {
         };
         /** Account emails to use for sending. If provided, only these accounts are used; otherwise all workspace accounts. */
         email_list?: string[];
-        /** Sequence steps (subject, body, delay in days). If provided, campaign will have this email sequence in the Sequences tab. */
+        /** Sequence steps (subject, body, delay). If provided, campaign will have this email sequence in the Sequences tab. */
         sequenceSteps?: Array<{ subject: string; body: string; delayDays: number }>;
+        /** Delay unit for sequence steps. Default "days". Use "minutes" for test campaigns so emails arrive within minutes. */
+        delayUnit?: "days" | "minutes";
       }
     ): Promise<{ id: string }> {
       const schedule = options?.schedule;
@@ -276,12 +278,13 @@ function createInstantlyClient(apiKey: string) {
         body.email_list = options.email_list;
       }
       if (options?.sequenceSteps != null && options.sequenceSteps.length > 0) {
+        const unit = options.delayUnit ?? "days";
         body.sequences = [
           {
             steps: options.sequenceSteps.map((s) => ({
               type: "email",
               delay: s.delayDays,
-              delay_unit: "days",
+              delay_unit: unit,
               variants: [{ subject: s.subject, body: s.body }],
             })),
           },

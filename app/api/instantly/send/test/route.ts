@@ -100,15 +100,12 @@ export async function POST(request: Request) {
       //
     }
 
-    const minGapDays = () => 2 + Math.floor(Math.random() * 2);
-    const sequenceSteps = playbookSteps.map((s, i) => {
-      const delay = i === 0 ? 0 : Math.max(s.delayDays, minGapDays());
-      return {
-        subject: `{{step${i + 1}_subject}}`,
-        body: `{{step${i + 1}_body}}`,
-        delayDays: delay,
-      };
-    });
+    // Test campaign: 2 min between each step so all emails arrive within minutes
+    const sequenceSteps = playbookSteps.map((s, i) => ({
+      subject: `{{step${i + 1}_subject}}`,
+      body: `{{step${i + 1}_body}}`,
+      delayDays: i === 0 ? 0 : 2,
+    }));
 
     type LeadWithSteps = (typeof batch.leads)[0] & { stepsJson?: string | null };
     const getLeadSteps = (lead: LeadWithSteps, numSteps: number): Array<{ subject: string; body: string }> => {
@@ -154,6 +151,7 @@ export async function POST(request: Request) {
     const campaignName = `[TEST] ${campaignNameTrimmed}`;
     const created = await client.createCampaign(campaignName, {
       sequenceSteps,
+      delayUnit: "minutes",
     });
     const campaignId = created.id;
     if (!campaignId) {
@@ -194,7 +192,7 @@ export async function POST(request: Request) {
       campaignName,
       testEmail: testEmailTrimmed,
       numSteps,
-      message: `Test campaign created and activated. You will receive ${numSteps} separate emails at ${testEmailTrimmed} over the next days (step 1 immediately, then step 2 after 2–3 days, etc.). Check your inbox to confirm each step goes out as its own email.`,
+      message: `Test campaign created. You will receive ${numSteps} emails at ${testEmailTrimmed} within minutes (step 1 immediately, then one every ~2 min). Check your inbox.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Test send failed";
