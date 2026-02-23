@@ -1,6 +1,6 @@
 # Deployment Guide
 
-**How we deploy (after repo is connected to Vercel/Railway):** Push to GitHub. No `vercel` CLI — the connected Vercel/Railway project builds automatically from the branch you push. Run `npx prisma migrate deploy` if you changed the DB schema (e.g. locally where production DB is reachable).
+**This project is deployed on Vercel.** Deploy by pushing to GitHub; Vercel auto-builds from the connected repo. No `vercel` CLI. Run `npx prisma migrate deploy` if you changed the DB schema (e.g. locally where production DB is reachable).
 
 ## Quick Deploy
 
@@ -52,7 +52,7 @@
 
 **Required for signup verification emails:**
 - `RESEND_API_KEY` - From [resend.com](https://resend.com) (free tier). Omit = signup will fail with a clear error until set.
-- `RESEND_FROM_EMAIL` - Optional. Defaults to `onboarding@resend.dev`; use a verified domain if you prefer.
+- `RESEND_FROM_EMAIL` - **Recommended for production.** Defaults to `onboarding@resend.dev`, which is in "testing" mode: Resend only allows sending to your Resend account email. To send to any user, [verify a domain](https://resend.com/domains) (e.g. your app domain) and set `RESEND_FROM_EMAIL=noreply@yourdomain.com`.
 
 **Optional (for future features):**
 - User-provided API keys stored in DB (Anthropic, Instantly, etc.)

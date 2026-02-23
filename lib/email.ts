@@ -56,17 +56,22 @@ export async function sendVerificationEmail(
     }),
   });
 
-  const data = await res.json().catch(() => ({})) as { message?: string };
+  const data = (await res.json().catch(() => ({}))) as { message?: string };
+  const resendMessage = typeof data?.message === "string" ? data.message : "";
 
   if (!res.ok) {
-    const msg =
-      typeof data?.message === "string"
-        ? data.message
-        : res.status === 401
+    // Resend "testing" mode: only send to account owner until domain is verified
+    const isTestingMode =
+      res.status === 403 &&
+      /only send testing emails to your own|verify a domain/i.test(resendMessage);
+    const msg = isTestingMode
+      ? "Resend is in testing mode: you can only send to your Resend account email until you verify a domain. Go to resend.com/domains, verify your domain (e.g. gatherhq.com), then set RESEND_FROM_EMAIL to an address on that domain (e.g. noreply@gatherhq.com) in Vercel."
+      : resendMessage ||
+        (res.status === 401
           ? "Invalid Resend API key. Check RESEND_API_KEY."
           : res.status === 422
-            ? "Invalid from address or recipient. Use onboarding@resend.dev or a verified domain."
-            : "Resend API error";
+            ? "Invalid from address or recipient. Use a verified domain for RESEND_FROM_EMAIL."
+            : "Resend API error");
     throw new Error(`Verification email failed: ${msg}`);
   }
 
