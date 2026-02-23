@@ -260,7 +260,14 @@ function createInstantlyClient(apiKey: string) {
         name: string;
         campaign_schedule: typeof campaign_schedule;
         email_list?: string[];
-        sequences?: Array<{ steps: Array<{ type: string; delay: number; variants: Array<{ subject: string; body: string }> }> }>;
+        sequences?: Array<{
+          steps: Array<{
+            type: string;
+            delay: number;
+            delay_unit?: string;
+            variants: Array<{ subject: string; body: string }>;
+          }>;
+        }>;
       } = {
         name,
         campaign_schedule,
@@ -274,6 +281,7 @@ function createInstantlyClient(apiKey: string) {
             steps: options.sequenceSteps.map((s) => ({
               type: "email",
               delay: s.delayDays,
+              delay_unit: "days",
               variants: [{ subject: s.subject, body: s.body }],
             })),
           },
@@ -336,6 +344,12 @@ function createInstantlyClient(apiKey: string) {
         duplicated_leads: totalDuplicated,
         in_blocklist: totalInBlocklist,
       };
+    },
+
+    /** Register custom variable names on a campaign so sequence steps can use {{variable}} per lead. */
+    async addCampaignVariables(campaignId: string, variableNames: string[]): Promise<unknown> {
+      if (variableNames.length === 0) return undefined;
+      return request("POST", `/campaigns/${campaignId}/variables`, { variables: variableNames });
     },
 
     /** Activate a campaign so it starts sending. */

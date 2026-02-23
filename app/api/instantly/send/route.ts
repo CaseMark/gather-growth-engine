@@ -264,6 +264,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Instantly did not return campaign ids" }, { status: 500 });
       }
 
+      const stepVariableNames = Array.from({ length: numSteps }, (_, i) => [
+        `step${i + 1}_subject`,
+        `step${i + 1}_body`,
+      ]).flat();
+      await Promise.all([
+        client.addCampaignVariables(idA, stepVariableNames),
+        client.addCampaignVariables(idB, stepVariableNames),
+      ]);
+
       const [resA, resB] = await Promise.all([
         client.bulkAddLeadsToCampaign(idA, toPayload(leadsA, subjectLineA!.trim()), {
           verify_leads_on_import: false,
@@ -325,6 +334,12 @@ export async function POST(request: Request) {
     if (!campaignId) {
       return NextResponse.json({ error: "Instantly did not return campaign id" }, { status: 500 });
     }
+
+    const stepVariableNames = Array.from({ length: numSteps }, (_, i) => [
+      `step${i + 1}_subject`,
+      `step${i + 1}_body`,
+    ]).flat();
+    await client.addCampaignVariables(campaignId, stepVariableNames);
 
     const leadsPayload = leadsWithContent.map((l) => {
       const steps = getLeadSteps(l, numSteps);
