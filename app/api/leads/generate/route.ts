@@ -134,7 +134,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const prompt = `You are writing a personalized cold outreach SEQUENCE (${steps.length} emails) for one lead. Personalize each step for this lead (use their name, company, job title, industry). Keep structure and length. Use placeholders {{firstName}}, {{company}}, {{senderName}} where needed.
+      const prompt = `You are writing a personalized cold outreach SEQUENCE (${steps.length} emails) for one lead. Personalize each step for this lead by using their actual name, company, job title, and industry directly in the text. Do NOT use placeholders like {{firstName}} or {{company}}—write the real values (e.g. "Hey, David," not "Hey, {{firstName}},"). Keep structure and length.
 
 Product summary: ${productSummary}
 ICP: ${icp}${proofPointsText}${strategyBlock}
