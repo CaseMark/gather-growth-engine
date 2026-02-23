@@ -12,6 +12,11 @@ type Analytics = {
   totalCampaigns: number;
   totalLeads: number;
   workspacesWithDomain: number;
+  usersVerified?: number;
+  usersWithAnthropicKey?: number;
+  usersWithInstantlyKey?: number;
+  usersWhoCreatedCampaign?: number;
+  usersWhoSentCampaign?: number;
   recentUsers: Array<{ id: string; email: string; name: string | null; createdAt: string; emailVerified: boolean }>;
   recentCampaigns: Array<{
     name: string;
@@ -184,6 +189,91 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
+
+        <section className="mb-8">
+          <h2 className="text-lg font-medium text-zinc-200 mb-2">User journey · where they get stuck</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Funnel from signup to first send. Gaps show where users drop off.
+          </p>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 overflow-x-auto">
+            <table className="w-full min-w-[420px] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-700 text-left text-zinc-500">
+                  <th className="pb-3 pr-4">Step</th>
+                  <th className="pb-3 pr-4 text-right">Count</th>
+                  <th className="pb-3 pr-4 text-right">% of previous</th>
+                  <th className="pb-3 text-zinc-500">Stuck (didn’t reach this step)</th>
+                </tr>
+              </thead>
+              <tbody className="text-zinc-300">
+                <tr className="border-b border-zinc-800">
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">1. Signed up</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.totalUsers}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">—</td>
+                  <td className="py-2.5 text-zinc-500">—</td>
+                </tr>
+                <tr className="border-b border-zinc-800">
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">2. Verified email</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.usersVerified ?? 0}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">
+                    {analytics.totalUsers ? Math.round(((analytics.usersVerified ?? 0) / analytics.totalUsers) * 100) : 0}%
+                  </td>
+                  <td className="py-2.5 text-zinc-500">
+                    {Math.max(0, analytics.totalUsers - (analytics.usersVerified ?? 0))} not verified
+                  </td>
+                </tr>
+                <tr className="border-b border-zinc-800">
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">3. Completed onboarding (domain)</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.workspacesWithDomain}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">
+                    {(analytics.usersVerified ?? 0) ? Math.round((analytics.workspacesWithDomain / (analytics.usersVerified ?? 0)) * 100) : 0}%
+                  </td>
+                  <td className="py-2.5 text-zinc-500">
+                    {Math.max(0, (analytics.usersVerified ?? 0) - analytics.workspacesWithDomain)} verified but no domain
+                  </td>
+                </tr>
+                <tr className="border-b border-zinc-800">
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">4. Added Anthropic key</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.usersWithAnthropicKey ?? 0}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">
+                    {analytics.workspacesWithDomain ? Math.round(((analytics.usersWithAnthropicKey ?? 0) / analytics.workspacesWithDomain) * 100) : 0}%
+                  </td>
+                  <td className="py-2.5 text-zinc-500">optional</td>
+                </tr>
+                <tr className="border-b border-zinc-800">
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">5. Added Instantly key</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.usersWithInstantlyKey ?? 0}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">
+                    {analytics.workspacesWithDomain ? Math.round(((analytics.usersWithInstantlyKey ?? 0) / analytics.workspacesWithDomain) * 100) : 0}%
+                  </td>
+                  <td className="py-2.5 text-zinc-500">
+                    {Math.max(0, analytics.workspacesWithDomain - (analytics.usersWithInstantlyKey ?? 0))} have domain but no Instantly key
+                  </td>
+                </tr>
+                <tr className="border-b border-zinc-800">
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">6. Created a campaign</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.usersWhoCreatedCampaign ?? 0}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">
+                    {analytics.workspacesWithDomain ? Math.round(((analytics.usersWhoCreatedCampaign ?? 0) / analytics.workspacesWithDomain) * 100) : 0}%
+                  </td>
+                  <td className="py-2.5 text-zinc-500">
+                    {Math.max(0, analytics.workspacesWithDomain - (analytics.usersWhoCreatedCampaign ?? 0))} onboarded but never started a campaign
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-4 font-medium text-zinc-200">7. Sent a campaign</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">{analytics.usersWhoSentCampaign ?? 0}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums">
+                    {analytics.workspacesWithDomain ? Math.round(((analytics.usersWhoSentCampaign ?? 0) / analytics.workspacesWithDomain) * 100) : 0}%
+                  </td>
+                  <td className="py-2.5 text-zinc-500">
+                    {Math.max(0, (analytics.usersWhoCreatedCampaign ?? 0) - (analytics.usersWhoSentCampaign ?? 0))} created campaign but never sent
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">

@@ -30,6 +30,11 @@ export async function GET() {
       totalCampaigns,
       totalLeads,
       workspacesWithDomain,
+      usersVerified,
+      usersWithAnthropicKey,
+      usersWithInstantlyKey,
+      usersWhoCreatedCampaign,
+      usersWhoSentCampaign,
       recentUsers,
       recentCampaigns,
     ] = await Promise.all([
@@ -39,6 +44,11 @@ export async function GET() {
       prisma.sentCampaign.count(),
       prisma.lead.count(),
       prisma.workspace.count({ where: { domain: { not: null } } }),
+      prisma.user.count({ where: { emailVerified: { not: null } } }),
+      prisma.workspace.count({ where: { anthropicKey: { not: null } } }),
+      prisma.workspace.count({ where: { instantlyKey: { not: null } } }),
+      prisma.user.count({ where: { workspace: { campaigns: { some: {} } } } }),
+      prisma.user.count({ where: { workspace: { sentCampaigns: { some: {} } } } }),
       prisma.user.findMany({
         take: 20,
         orderBy: { createdAt: "desc" },
@@ -65,6 +75,12 @@ export async function GET() {
       totalCampaigns,
       totalLeads,
       workspacesWithDomain,
+      // User journey funnel (where they get stuck)
+      usersVerified,
+      usersWithAnthropicKey,
+      usersWithInstantlyKey,
+      usersWhoCreatedCampaign,
+      usersWhoSentCampaign,
       recentUsers: recentUsers.map((u) => ({
         id: u.id,
         email: u.email,
