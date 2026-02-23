@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 /**
  * POST /api/instantly/sent-campaigns/[id]/test
  * Body: { testEmail: string }
- * Adds one lead (test email) to the existing Instantly campaign using the first lead's content.
+ * Adds one lead (test email) to the existing Instantly campaign using a lead that has step content.
  * The test recipient will get the same multi-step sequence as the original campaign.
  */
 export async function POST(
@@ -57,7 +57,7 @@ export async function POST(
                 stepsJson: true,
               },
               orderBy: { createdAt: "asc" },
-              take: 1,
+              take: 500,
             },
           },
         },
@@ -70,9 +70,9 @@ export async function POST(
     if (!sent.instantlyCampaignId) {
       return NextResponse.json({ error: "This campaign has no Instantly campaign ID" }, { status: 400 });
     }
-    const firstLead = sent.leadBatch?.leads?.[0];
-    if (!firstLead) {
-      return NextResponse.json({ error: "No leads in this campaign to use as template" }, { status: 400 });
+    const leads = sent.leadBatch?.leads ?? [];
+    if (leads.length === 0) {
+      return NextResponse.json({ error: "No leads in this campaign" }, { status: 400 });
     }
 
     const ctx = await getInstantlyClientForUserId(session.user.id);
@@ -83,7 +83,7 @@ export async function POST(
       );
     }
 
-    type LeadRow = typeof firstLead;
+    type LeadRow = (typeof leads)[0];
     const getSteps = (lead: LeadRow): Array<{ subject: string; body: string }> => {
       if (lead.stepsJson) {
         try {
@@ -99,13 +99,18 @@ export async function POST(
         { subject: lead.step1Subject ?? "", body: lead.step1Body ?? "" },
         { subject: lead.step2Subject ?? "", body: lead.step2Body ?? "" },
         { subject: lead.step3Subject ?? "", body: lead.step3Body ?? "" },
-      ].filter((s) => s.subject || s.body);
+      ].filter((s) => (s.subject ?? "").trim() || (s.body ?? "").trim());
     };
 
-    const steps = getSteps(firstLead);
-    if (steps.length === 0) {
-      return NextResponse.json({ error: "First lead has no step content" }, { status: 400 });
+    const templateLead = leads.find((l) => getSteps(l).length > 0);
+    if (!templateLead) {
+      return NextResponse.json(
+        { error: "No leads in this campaign have email content (all have blank subject/body). There’s nothing to send as a test." },
+        { status: 400 }
+      );
     }
+
+    const steps = getSteps(templateLead);
 
     const bodyWithLineBreaks = (text: string) =>
       (text ?? "").replace(/\r\n/g, "\n").replace(/\n/g, "<br>\n");

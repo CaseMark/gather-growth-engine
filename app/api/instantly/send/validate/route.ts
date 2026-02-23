@@ -97,6 +97,13 @@ export async function GET(request: Request) {
       return steps;
     };
 
+    // Leads with zero content (never generated or empty)
+    const leadsWithNoContent = batch.leads.filter((l) => {
+      const steps = getLeadSteps(l as LeadWithSteps, numSteps);
+      const hasAny = steps.some((s) => (s.subject ?? "").trim().length > 0 || (s.body ?? "").trim().length > 0);
+      return !hasAny;
+    });
+
     type StepFail = { leadEmail: string; stepIndex: number; reason: string };
     const stepFails: StepFail[] = [];
     const leadsPassingAllSteps = batch.leads.filter((l) => {
@@ -140,6 +147,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       numSteps,
       totalLeads: batch.leads.length,
+      leadsWithNoContent: leadsWithNoContent.length,
       leadsPassingAllSteps: leadsPassingAllSteps.length,
       canSend: leadsPassingAllSteps.length === batch.leads.length && batch.leads.length > 0,
       steps,

@@ -199,10 +199,20 @@ export async function POST(request: Request) {
       );
     }
 
-    // We only send leads that pass ALL steps. If some fail, we still allow send with the passing subset (UI shows validation).
+    // Every lead must have a full sequence that passes. No partial send.
     if (leadsPassingAllSteps.length < batch.leads.length) {
-      console.warn(
-        `[Instantly send] ${batch.leads.length - leadsPassingAllSteps.length} leads failed quality for all steps; sending ${leadsPassingAllSteps.length}`
+      const missing = batch.leads.length - leadsPassingAllSteps.length;
+      return NextResponse.json(
+        {
+          error: `Every lead must have a personalized ${numSteps}-step sequence that passes the quality check (subject ≥10 chars, body ≥50 chars per step). ${missing} of ${batch.leads.length} leads are missing content or fail. Run "Generate sequences" until the quality check shows 100% pass, then try again.`,
+          validation: {
+            numSteps,
+            totalLeads: batch.leads.length,
+            leadsPassingAllSteps: leadsPassingAllSteps.length,
+            sampleFails: stepFails.slice(0, 15),
+          },
+        },
+        { status: 400 }
       );
     }
 

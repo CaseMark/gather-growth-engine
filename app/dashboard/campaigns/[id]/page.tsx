@@ -52,6 +52,7 @@ export default function CampaignPage() {
   const [validation, setValidation] = useState<{
     numSteps: number;
     totalLeads: number;
+    leadsWithNoContent: number;
     leadsPassingAllSteps: number;
     canSend: boolean;
     steps: Array<{ step: number; passed: number; failed: number; passedAllLeads: boolean; sampleFailures: string[] }>;
@@ -132,6 +133,7 @@ export default function CampaignPage() {
           setValidation({
             numSteps: data.numSteps,
             totalLeads: data.totalLeads,
+            leadsWithNoContent: data.leadsWithNoContent ?? 0,
             leadsPassingAllSteps: data.leadsPassingAllSteps,
             canSend: data.canSend === true,
             steps: data.steps ?? [],
@@ -264,8 +266,8 @@ export default function CampaignPage() {
       setSendError("Campaign name and lead list are required.");
       return;
     }
-    if (validation && validation.leadsPassingAllSteps === 0) {
-      setSendError("No leads pass the quality check for all steps. Fix or regenerate sequences.");
+    if (validation && !validation.canSend) {
+      setSendError("Every lead must have a full sequence that passes. Run 'Generate sequences' until 100% pass.");
       return;
     }
     setSending(true);
@@ -455,14 +457,19 @@ export default function CampaignPage() {
                   <h2 className="text-lg font-medium text-zinc-200">Configure & launch</h2>
                   <p className="text-sm text-zinc-500">Each step goes out as a separate email. Verify quality and send a test first.</p>
 
-                  {/* Email quality check — each step must pass */}
+                  {/* Email quality check — every lead must have full N-step sequence */}
                   <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
                     <h3 className="text-sm font-medium text-zinc-300 mb-2">Email quality check</h3>
-                    <p className="text-xs text-zinc-500 mb-3">Every step of every lead must have subject ≥10 chars and body ≥50 chars. No blank emails.</p>
+                    <p className="text-xs text-zinc-500 mb-3">Every lead must have a personalized {validation?.numSteps ?? "N"}-step sequence (subject ≥10 chars, body ≥50 chars per step). No blank emails. Run &quot;Generate sequences&quot; until 100% pass.</p>
                     {validationLoading ? (
                       <p className="text-sm text-zinc-500">Loading…</p>
                     ) : validation?.steps?.length ? (
                       <ul className="space-y-2">
+                        {(validation.leadsWithNoContent ?? 0) > 0 && (
+                          <li className="text-amber-400 text-sm">
+                            {validation.leadsWithNoContent} lead(s) have no sequence yet. Go to Sequences and run &quot;Generate sequences&quot; until every lead is done.
+                          </li>
+                        )}
                         {validation.steps.map((s) => (
                           <li key={s.step} className="flex items-center gap-3 text-sm">
                             {s.passedAllLeads ? (
@@ -474,14 +481,14 @@ export default function CampaignPage() {
                             {s.passedAllLeads ? (
                               <span className="text-zinc-500">Passed ({validation.totalLeads} leads)</span>
                             ) : (
-                              <span className="text-amber-400">{s.failed} lead(s) fail — {s.sampleFailures?.[0] ?? "fix content"}</span>
+                              <span className="text-amber-400">{s.failed} lead(s) fail — {s.sampleFailures?.[0] ?? "regenerate or fix"}</span>
                             )}
                           </li>
                         ))}
                         <li className="text-zinc-500 text-xs mt-2">
                           {validation.canSend
-                            ? `${validation.leadsPassingAllSteps} leads ready to send. Each of ${validation.numSteps} steps will go out as a separate email.`
-                            : `Only ${validation.leadsPassingAllSteps} of ${validation.totalLeads} leads pass all steps. Fix or remove failing leads.`}
+                            ? `All ${validation.leadsPassingAllSteps} leads ready. Each of ${validation.numSteps} steps goes out as a separate email.`
+                            : `Every lead must pass. ${validation.leadsPassingAllSteps} of ${validation.totalLeads} pass. Run &quot;Generate sequences&quot; until 100% pass.`}
                         </li>
                       </ul>
                     ) : (
@@ -541,7 +548,7 @@ export default function CampaignPage() {
                   {sendError && <div className="rounded-md bg-red-900/20 border border-red-800 px-4 py-2 text-sm text-red-300">{sendError}</div>}
                   <button
                     onClick={handleLaunch}
-                    disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && validation.leadsPassingAllSteps === 0)}
+                    disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && !validation.canSend)}
                     className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     {sending ? "Launching…" : "Launch campaign"}
