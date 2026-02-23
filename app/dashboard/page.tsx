@@ -16,6 +16,15 @@ type Campaign = {
   sentCampaigns: Array<{ id: string; name: string; createdAt: string }>;
 };
 
+type LegacySentCampaign = {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  leadCount: number;
+  isLegacy: true;
+};
+
 type Aggregate = {
   totalCampaigns: number;
   launchedCampaigns: number;
@@ -29,6 +38,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [workspace, setWorkspace] = useState<{ domain?: string; hasAnthropicKey?: boolean; hasInstantlyKey?: boolean } | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [legacySentCampaigns, setLegacySentCampaigns] = useState<LegacySentCampaign[]>([]);
   const [aggregate, setAggregate] = useState<Aggregate>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -42,6 +52,7 @@ export default function DashboardPage() {
       .then(([onboardingData, campaignsData]) => {
         setWorkspace(onboardingData.workspace ?? null);
         setCampaigns(campaignsData.campaigns ?? []);
+        setLegacySentCampaigns(campaignsData.legacySentCampaigns ?? []);
         setAggregate(campaignsData.aggregate ?? null);
       })
       .catch(() => {})
@@ -157,7 +168,7 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {aggregate && (aggregate.totalCampaigns > 0 || aggregate.totalSentCampaigns > 0) && (
+              {aggregate && (aggregate.totalCampaigns > 0 || aggregate.totalLeads > 0 || aggregate.totalReplies > 0) && (
                 <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
                     <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Campaigns</p>
@@ -182,7 +193,7 @@ export default function DashboardPage() {
                 <h2 className="px-6 py-4 text-lg font-medium text-zinc-200 border-b border-zinc-800">
                   All campaigns
                 </h2>
-                {campaigns.length === 0 ? (
+                {campaigns.length === 0 && legacySentCampaigns.length === 0 ? (
                   <p className="px-6 py-8 text-sm text-zinc-500">
                     No campaigns yet. Click &quot;Launch new campaign&quot; to create one and set up playbook → sequences → send.
                   </p>
@@ -199,7 +210,7 @@ export default function DashboardPage() {
                     </thead>
                     <tbody className="divide-y divide-zinc-800">
                       {campaigns.map((c) => (
-                        <tr key={c.id} className="text-sm">
+                        <tr key={`c-${c.id}`} className="text-sm">
                           <td className="px-6 py-4 text-zinc-200">{c.name}</td>
                           <td className="px-6 py-4">
                             <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -224,6 +235,21 @@ export default function DashboardPage() {
                               {c.status === "launched" ? "View" : "Continue"} →
                             </Link>
                           </td>
+                        </tr>
+                      ))}
+                      {legacySentCampaigns.map((s) => (
+                        <tr key={`legacy-${s.id}`} className="text-sm">
+                          <td className="px-6 py-4 text-zinc-200">{s.name}</td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-900/40 text-emerald-300">
+                              launched
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-zinc-400">{s.leadCount}</td>
+                          <td className="px-6 py-4 text-zinc-500">
+                            {new Date(s.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-zinc-500">—</td>
                         </tr>
                       ))}
                     </tbody>

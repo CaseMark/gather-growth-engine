@@ -134,6 +134,7 @@ model SentCampaign {
 
   workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign  Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  leadBatch LeadBatch?  @relation(fields: [leadBatchId], references: [id], onDelete: SetNull)
   replies   CampaignReply[]
 }
 
@@ -155,9 +156,10 @@ model LeadBatch {
   name        String?  // optional label
   createdAt   DateTime @default(now())
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  campaigns Campaign[]
-  leads     Lead[]
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns    Campaign[]
+  sentCampaigns SentCampaign[]
+  leads       Lead[]
 }
 
 model Lead {

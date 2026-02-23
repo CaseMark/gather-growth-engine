@@ -19,47 +19,59 @@ export async function GET() {
       return NextResponse.json({ campaigns: [], aggregate: null }, { status: 200 });
     }
 
-    const campaigns = await prisma.campaign.findMany({
-      where: { workspaceId: workspace.id },
-      orderBy: { createdAt: "desc" },
-      include: {
-        leadBatch: { select: { id: true, name: true, _count: { select: { leads: true } } } },
-        sentCampaigns: {
-          select: {
-            id: true,
-            name: true,
-            instantlyCampaignId: true,
-            variant: true,
-            createdAt: true,
+    const [campaigns, legacySentCampaigns, allSentForWorkspace, replyCountResult, totalLeadsResult] = await Promise.all([
+      prisma.campaign.findMany({
+        where: { workspaceId: workspace.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          leadBatch: { select: { id: true, name: true, _count: { select: { leads: true } } } },
+          sentCampaigns: {
+            select: {
+              id: true,
+              name: true,
+              instantlyCampaignId: true,
+              variant: true,
+              createdAt: true,
+            },
           },
         },
-      },
-    });
-
-    // Aggregate stats across all sent campaigns for this workspace (launched campaigns)
-    const sentIds = campaigns.flatMap((c) => c.sentCampaigns.map((s) => s.id));
-    const [sentCampaignsForStats, replyCount] = await Promise.all([
-      sentIds.length > 0
-        ? prisma.sentCampaign.findMany({
-            where: { id: { in: sentIds } },
-            select: { id: true },
-          })
-        : [],
-      sentIds.length > 0
-        ? prisma.campaignReply.count({ where: { sentCampaignId: { in: sentIds } } })
-        : 0,
+      }),
+      // Sent campaigns created before the campaign flow (no campaignId) — show so existing campaigns aren't "gone"
+      prisma.sentCampaign.findMany({
+        where: { workspaceId: workspace.id, campaignId: null },
+        orderBy: { createdAt: "desc" },
+        include: {
+          leadBatch: { select: { _count: { select: { leads: true } } } },
+        },
+      }),
+      prisma.sentCampaign.findMany({
+        where: { workspaceId: workspace.id },
+        select: { id: true },
+      }),
+      prisma.campaignReply.count({
+        where: { sentCampaign: { workspaceId: workspace.id } },
+      }),
+      prisma.lead.count({
+        where: { leadBatch: { workspaceId: workspace.id } },
+      }),
     ]);
-    const totalSent = sentCampaignsForStats.length;
-    const totalLeads = campaigns.reduce((sum, c) => sum + (c.leadBatch?._count?.leads ?? 0), 0);
 
     return NextResponse.json({
       campaigns,
+      legacySentCampaigns: legacySentCampaigns.map((s) => ({
+        id: s.id,
+        name: s.name,
+        status: "launched",
+        createdAt: s.createdAt,
+        leadCount: s.leadBatch?._count?.leads ?? 0,
+        isLegacy: true,
+      })),
       aggregate: {
-        totalCampaigns: campaigns.length,
-        launchedCampaigns: campaigns.filter((c) => c.status === "launched").length,
-        totalSentCampaigns: totalSent,
-        totalLeads,
-        totalReplies: replyCount,
+        totalCampaigns: campaigns.length + legacySentCampaigns.length,
+        launchedCampaigns: campaigns.filter((c) => c.status === "launched").length + legacySentCampaigns.length,
+        totalSentCampaigns: allSentForWorkspace.length,
+        totalLeads: totalLeadsResult,
+        totalReplies: replyCountResult,
       },
     });
   } catch (error) {
