@@ -12,11 +12,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { domain, anthropicKey, instantlyKey } = await request.json();
+    const body = await request.json();
+    const domain = typeof body.domain === "string" ? body.domain.trim() : "";
+    const anthropicKey = typeof body.anthropicKey === "string" ? body.anthropicKey.trim() : "";
+    const instantlyKey = typeof body.instantlyKey === "string" ? body.instantlyKey.trim() : "";
 
-    if (!domain || !anthropicKey || !instantlyKey) {
+    if (!domain) {
       return NextResponse.json(
-        { error: "Domain, Anthropic key, and Instantly key are required" },
+        { error: "Domain is required" },
         { status: 400 }
       );
     }
@@ -30,17 +33,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Encrypt API keys
-    const encryptedAnthropicKey = encrypt(anthropicKey);
-    const encryptedInstantlyKey = encrypt(instantlyKey);
+    // Encrypt API keys only when provided (keys are optional so users can explore first)
+    const encryptedAnthropicKey = anthropicKey ? encrypt(anthropicKey) : null;
+    const encryptedInstantlyKey = instantlyKey ? encrypt(instantlyKey) : null;
 
-    // Upsert workspace (create or update)
+    // Upsert workspace (create or update). Keys optional: on update only set keys when non-empty (don't wipe when form sends empty).
     const workspace = await prisma.workspace.upsert({
       where: { userId: session.user.id },
       update: {
         domain,
-        anthropicKey: encryptedAnthropicKey,
-        instantlyKey: encryptedInstantlyKey,
+        ...(anthropicKey && { anthropicKey: encryptedAnthropicKey }),
+        ...(instantlyKey && { instantlyKey: encryptedInstantlyKey }),
       },
       create: {
         userId: session.user.id,
@@ -71,7 +74,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const workspace = await prisma.workspace.findUnique({
+    const row = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
       select: {
         id: true,
@@ -80,9 +83,21 @@ export async function GET(request: Request) {
         anthropicModel: true,
         createdAt: true,
         updatedAt: true,
-        // Don't return encrypted keys
+        anthropicKey: true,
+        instantlyKey: true,
       },
     });
+
+    if (!row) {
+      return NextResponse.json({ workspace: null }, { status: 200 });
+    }
+
+    const { anthropicKey: _ak, instantlyKey: _ik, ...rest } = row;
+    const workspace = {
+      ...rest,
+      hasAnthropicKey: Boolean(_ak),
+      hasInstantlyKey: Boolean(_ik),
+    };
 
     return NextResponse.json({ workspace }, { status: 200 });
   } catch (error) {

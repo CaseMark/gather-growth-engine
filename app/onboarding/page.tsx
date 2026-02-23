@@ -100,8 +100,10 @@ export default function OnboardingPage() {
       <main className="mx-auto max-w-2xl px-6 py-12">
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="mt-2 text-zinc-400">
-          Enter your domain and API keys. We'll crawl your home page and use
-          these to run the engine.
+          Enter your domain to get started. You can add API keys now or later — we&apos;ll take you to the dashboard either way.
+        </p>
+        <p className="mt-1 text-sm text-zinc-500">
+          Need keys? Both are free. We&apos;ll show you exactly where to get them (about 2 minutes).
         </p>
 
         {existingData && (
@@ -137,19 +139,28 @@ export default function OnboardingPage() {
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-sm font-medium text-zinc-300">API keys</h2>
+            <h2 className="text-sm font-medium text-zinc-300">API keys (optional for now)</h2>
             <p className="text-xs text-zinc-500">
-              These keys are encrypted and stored securely. They'll be used only for your account's operations.
+              Add these when you&apos;re ready to crawl, generate playbooks, and send campaigns. Encrypted and used only for your account.
             </p>
             <div>
               <label htmlFor="anthropic_key" className="block text-sm text-zinc-400">
                 Anthropic API key
               </label>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-500 hover:text-emerald-400"
+                >
+                  Get your key at console.anthropic.com →
+                </a>
+              </p>
               <input
                 id="anthropic_key"
                 name="anthropic_key"
                 type="password"
-                required
                 placeholder="sk-ant-..."
                 value={anthropicKey}
                 onChange={(e) => setAnthropicKey(e.target.value)}
@@ -160,12 +171,21 @@ export default function OnboardingPage() {
               <label htmlFor="instantly_key" className="block text-sm text-zinc-400">
                 Instantly API key
               </label>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                <a
+                  href="https://app.instantly.ai/app/settings/integrations"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-500 hover:text-emerald-400"
+                >
+                  Get your key in Instantly → Settings → Integrations → API Keys →
+                </a>
+              </p>
               <input
                 id="instantly_key"
                 name="instantly_key"
                 type="password"
-                required
-                placeholder="Instantly API key"
+                placeholder="Paste your Instantly API key"
                 value={instantlyKey}
                 onChange={(e) => setInstantlyKey(e.target.value)}
                 className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"

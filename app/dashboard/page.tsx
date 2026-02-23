@@ -1116,6 +1116,16 @@ export default function DashboardPage() {
           Welcome, {session.user?.name || session.user?.email}
         </p>
 
+        {hasOnboarding && workspace && (!(workspace as any).hasAnthropicKey || !(workspace as any).hasInstantlyKey) && (
+          <div className="mt-6 rounded-lg border border-amber-800/60 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
+            <strong>Complete setup to unlock everything.</strong> Add your Anthropic key to crawl your site and generate playbooks; add your Instantly key to send campaigns. You can add them anytime in{" "}
+            <Link href="/onboarding" className="font-medium text-amber-100 underline hover:no-underline">
+              Settings
+            </Link>
+            .
+          </div>
+        )}
+
         {hasOnboarding && playbookData.playbookApproved && (
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="card p-5">
