@@ -176,9 +176,36 @@ export async function POST(request: Request) {
     }
 
     if (leadsWithContent.length < batch.leads.length) {
-      // Log so we can see it in server logs; response will still indicate leads_uploaded
       console.warn(
         `[Instantly send] Skipping ${batch.leads.length - leadsWithContent.length} leads with no content; sending ${leadsWithContent.length}`
+      );
+    }
+
+    // Quality gate: every email must meet minimum bar (no stub/placeholder sends)
+    const MIN_SUBJECT_LENGTH = 10;
+    const MIN_BODY_LENGTH = 50;
+    const qualityFails: string[] = [];
+    for (const l of leadsWithContent) {
+      const steps = getLeadSteps(l as LeadWithSteps, numSteps);
+      const first = steps[0];
+      const subj = (first?.subject ?? "").trim();
+      const body = (first?.body ?? "").trim();
+      if (subj.length < MIN_SUBJECT_LENGTH) {
+        qualityFails.push(`${l.email}: subject too short (${subj.length} chars, min ${MIN_SUBJECT_LENGTH})`);
+      }
+      if (body.length < MIN_BODY_LENGTH) {
+        qualityFails.push(`${l.email}: body too short (${body.length} chars, min ${MIN_BODY_LENGTH})`);
+      }
+    }
+    if (qualityFails.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Quality check failed. Every email must have a subject ≥10 characters and body ≥50 characters. Fix or regenerate sequences for these leads, then try again.",
+          details: qualityFails.slice(0, 20),
+          totalFailing: qualityFails.length,
+        },
+        { status: 400 }
       );
     }
 

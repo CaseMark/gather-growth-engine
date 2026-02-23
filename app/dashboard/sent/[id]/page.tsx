@@ -20,7 +20,7 @@ export default function SentCampaignDetailPage() {
     createdAt: string;
     campaignId: string | null;
     campaign?: { id: string; name: string; playbookJson: string | null } | null;
-    leadBatch?: { id: string; name: string | null; leadCount: number; leads: Array<{ email: string; name: string | null; company: string | null; step1Subject: string | null; step1Body: string | null; stepsJson: string | null }> } | null;
+    leadBatch?: { id: string; name: string | null; leadCount: number; leads: Array<{ id: string; email: string; name: string | null; company: string | null; step1Subject: string | null; step1Body: string | null; stepsJson: string | null }> } | null;
   } | null>(null);
   const [workspacePlaybook, setWorkspacePlaybook] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<{
@@ -38,6 +38,7 @@ export default function SentCampaignDetailPage() {
   const [playbookSteps, setPlaybookSteps] = useState<Step[]>([]);
   const [savingPlaybook, setSavingPlaybook] = useState(false);
   const [playbookSaved, setPlaybookSaved] = useState(false);
+  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sentId || !session?.user?.id) return;
@@ -126,6 +127,24 @@ export default function SentCampaignDetailPage() {
 
   const suggestion = analytics?.suggestion ?? memory?.suggestion;
 
+  type LeadRow = { id: string; email: string; name: string | null; company: string | null; step1Subject: string | null; step1Body: string | null; stepsJson: string | null };
+  const getLeadStepsForDisplay = (lead: LeadRow): Array<{ subject: string; body: string }> => {
+    if (lead.stepsJson) {
+      try {
+        const arr = JSON.parse(lead.stepsJson) as Array<{ subject?: string; body?: string }>;
+        if (Array.isArray(arr) && arr.length > 0) {
+          return arr.map((s) => ({ subject: s.subject ?? "", body: s.body ?? "" }));
+        }
+      } catch {
+        //
+      }
+    }
+    const s1 = lead.step1Subject ?? "";
+    const b1 = lead.step1Body ?? "";
+    if (s1 || b1) return [{ subject: s1, body: b1 }];
+    return [];
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-zinc-800/80 bg-zinc-950/95 flex-shrink-0">
@@ -173,40 +192,53 @@ export default function SentCampaignDetailPage() {
             </div>
           </section>
 
-          {/* Emails sent (sample) */}
+          {/* Emails sent — click any to read full content */}
           {sent.leadBatch && sent.leadBatch.leads.length > 0 && (
             <section className="mb-10">
-              <h2 className="text-lg font-medium text-zinc-200 mb-4">Emails sent (sample)</h2>
+              <h2 className="text-lg font-medium text-zinc-200 mb-4">Emails sent</h2>
               <p className="text-sm text-zinc-500 mb-3">
-                {sent.leadBatch.leadCount} leads total; showing up to 50 below.
+                {sent.leadBatch.leadCount} leads total; showing up to 50. Click any row to read the full email(s).
               </p>
-              <div className="space-y-4">
-                {sent.leadBatch.leads.slice(0, 10).map((lead) => {
-                  let firstSubject = lead.step1Subject ?? "";
-                  let firstBody = lead.step1Body ?? "";
-                  if (lead.stepsJson) {
-                    try {
-                      const steps = JSON.parse(lead.stepsJson) as Array<{ subject?: string; body?: string }>;
-                      if (steps[0]) {
-                        firstSubject = steps[0].subject ?? firstSubject;
-                        firstBody = steps[0].body ?? firstBody;
-                      }
-                    } catch {
-                      //
-                    }
-                  }
+              <div className="space-y-2">
+                {sent.leadBatch.leads.map((lead) => {
+                  const steps = getLeadStepsForDisplay(lead);
+                  const firstSubject = steps[0]?.subject ?? "";
+                  const firstBody = steps[0]?.body ?? "";
+                  const isExpanded = expandedLeadId === lead.id;
                   return (
-                    <div key={lead.email} className="rounded-lg border border-zinc-800 p-4 text-sm">
-                      <p className="text-zinc-400 font-medium">{lead.email} {lead.company ? ` · ${lead.company}` : ""}</p>
-                      <p className="mt-1 text-zinc-500">Subject: {firstSubject || "(none)"}</p>
-                      <p className="mt-2 text-zinc-300 line-clamp-3">{firstBody || "(no body)"}</p>
+                    <div
+                      key={lead.id}
+                      className="rounded-lg border border-zinc-800 overflow-hidden text-sm"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setExpandedLeadId(isExpanded ? null : lead.id)}
+                        className="w-full text-left p-4 hover:bg-zinc-800/50 transition-colors"
+                      >
+                        <p className="text-zinc-400 font-medium">{lead.email}{lead.company ? ` · ${lead.company}` : ""}</p>
+                        <p className="mt-1 text-zinc-500">Subject: {firstSubject || "(none)"}</p>
+                        {!isExpanded && (
+                          <p className="mt-2 text-zinc-300 line-clamp-2">{firstBody || "(no body)"}</p>
+                        )}
+                        <p className="mt-2 text-xs text-zinc-500">{isExpanded ? "▼ Click to collapse" : "▶ Click to read full email"}</p>
+                      </button>
+                      {isExpanded && (
+                        <div className="border-t border-zinc-800 p-4 bg-zinc-900/50 space-y-6">
+                          {steps.map((step, i) => (
+                            <div key={i}>
+                              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Step {i + 1}</p>
+                              <p className="text-zinc-500 font-medium">Subject: {step.subject || "(none)"}</p>
+                              <pre className="mt-2 text-zinc-300 whitespace-pre-wrap font-sans text-sm break-words">
+                                {step.body || "(no body)"}
+                              </pre>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              {sent.leadBatch.leads.length > 10 && (
-                <p className="mt-2 text-sm text-zinc-500">+ {Math.min(sent.leadBatch.leads.length - 10, 40)} more…</p>
-              )}
             </section>
           )}
 
