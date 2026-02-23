@@ -39,6 +39,10 @@ export default function SentCampaignDetailPage() {
   const [savingPlaybook, setSavingPlaybook] = useState(false);
   const [playbookSaved, setPlaybookSaved] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [emailsPage, setEmailsPage] = useState(1);
+  const [testEmail, setTestEmail] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
 
   useEffect(() => {
     if (!sentId || !session?.user?.id) return;
@@ -78,6 +82,10 @@ export default function SentCampaignDetailPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [sentId, session?.user?.id]);
+
+  useEffect(() => {
+    if (session?.user?.email && !testEmail) setTestEmail(session.user.email);
+  }, [session?.user?.email]);
 
   const savePlaybook = async () => {
     if (!sent) return;
@@ -169,6 +177,21 @@ export default function SentCampaignDetailPage() {
             <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-900/40 text-emerald-300">Launched</span>
           </div>
 
+          {/* AI suggestions — at top for visibility */}
+          {(suggestion || (memory?.byPersona && Object.keys(memory.byPersona).length > 0)) && (
+            <section className="mb-10">
+              <h2 className="text-lg font-medium text-zinc-200 mb-4">AI suggestions</h2>
+              <p className="text-sm text-zinc-500 mb-2">
+                Based on performance memory and stat-sig results across your campaigns.
+              </p>
+              {suggestion && (
+                <div className="rounded-lg border border-amber-800/50 bg-amber-900/20 p-4 text-sm text-amber-200">
+                  {suggestion}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Stats */}
           <section className="mb-10">
             <h2 className="text-lg font-medium text-zinc-200 mb-4">Stats</h2>
@@ -192,15 +215,72 @@ export default function SentCampaignDetailPage() {
             </div>
           </section>
 
-          {/* Emails sent — click any to read full content */}
-          {sent.leadBatch && sent.leadBatch.leads.length > 0 && (
+          {/* Send test to my email (for this launched campaign) */}
+          <section className="mb-10">
+            <h2 className="text-lg font-medium text-zinc-200 mb-4">Send test to my email</h2>
+            <p className="text-sm text-zinc-500 mb-3">
+              Add your email as a lead to this campaign in Instantly. You’ll receive the same multi-step sequence so you can see each email as it goes out.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs text-zinc-500 mb-1">Test email</label>
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setTestSending(true);
+                  setTestMessage("");
+                  try {
+                    const res = await fetch(`/api/instantly/sent-campaigns/${sentId}/test`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ testEmail: testEmail.trim() }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) setTestMessage(data.message ?? "Test lead added. Check your inbox.");
+                    else setTestMessage(data.error ?? "Failed");
+                  } catch {
+                    setTestMessage("Request failed");
+                  } finally {
+                    setTestSending(false);
+                  }
+                }}
+                disabled={testSending || !testEmail.trim()}
+                className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+              >
+                {testSending ? "Sending…" : "Send test to my email"}
+              </button>
+            </div>
+            {testMessage && (
+              <p className={`mt-3 text-sm ${testMessage.includes("Check your inbox") || testMessage.includes("added") ? "text-emerald-400" : "text-amber-400"}`}>
+                {testMessage}
+              </p>
+            )}
+          </section>
+
+          {/* Emails sent — paginated, click any to read full content */}
+          {sent.leadBatch && sent.leadBatch.leads.length > 0 && (() => {
+            const PAGE_SIZE = 20;
+            const total = sent.leadBatch.leads.length;
+            const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+            const page = Math.min(emailsPage, totalPages);
+            const start = (page - 1) * PAGE_SIZE;
+            const pageLeads = sent.leadBatch.leads.slice(start, start + PAGE_SIZE);
+            return (
             <section className="mb-10">
               <h2 className="text-lg font-medium text-zinc-200 mb-4">Emails sent</h2>
               <p className="text-sm text-zinc-500 mb-3">
-                {sent.leadBatch.leadCount} leads total; showing up to 50. Click any row to read the full email(s).
+                {sent.leadBatch.leadCount} leads total; showing {start + 1}–{Math.min(start + PAGE_SIZE, total)} of {total}. Click any row to read the full email(s).
               </p>
               <div className="space-y-2">
-                {sent.leadBatch.leads.map((lead) => {
+                {pageLeads.map((lead) => {
                   const steps = getLeadStepsForDisplay(lead);
                   const firstSubject = steps[0]?.subject ?? "";
                   const firstBody = steps[0]?.body ?? "";
@@ -239,8 +319,32 @@ export default function SentCampaignDetailPage() {
                   );
                 })}
               </div>
+              {totalPages > 1 && (
+                <div className="mt-4 flex items-center gap-4 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setEmailsPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="rounded border border-zinc-600 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-zinc-500">
+                    Page {page} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEmailsPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="rounded border border-zinc-600 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </section>
-          )}
+            );
+          })()}
 
           {/* Replies */}
           {replies.length > 0 && (
@@ -255,21 +359,6 @@ export default function SentCampaignDetailPage() {
                   </div>
                 ))}
               </div>
-            </section>
-          )}
-
-          {/* AI suggestions */}
-          {(suggestion || (memory?.byPersona && Object.keys(memory.byPersona).length > 0)) && (
-            <section className="mb-10">
-              <h2 className="text-lg font-medium text-zinc-200 mb-4">AI suggestions</h2>
-              <p className="text-sm text-zinc-400 mb-2">
-                Based on performance memory and stat-sig results across your campaigns.
-              </p>
-              {suggestion && (
-                <div className="rounded-lg border border-amber-800/50 bg-amber-900/20 p-4 text-sm text-amber-200">
-                  {suggestion}
-                </div>
-              )}
             </section>
           )}
 
