@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { batchId, offset: offsetParam, limit: limitParam } = body as { batchId: string; offset?: number; limit?: number };
+    const { batchId, offset: offsetParam, limit: limitParam, campaignId: campaignIdParam } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string };
 
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -34,6 +34,22 @@ export async function POST(request: Request) {
 
     if (!workspace?.anthropicKey) {
       return NextResponse.json({ error: "Anthropic API key not configured." }, { status: 400 });
+    }
+
+    // When campaignId provided, use campaign's playbook/icp/proofPoints for this campaign flow
+    let campaignPlaybook: string | null = null;
+    let campaignIcp: string | null = null;
+    let campaignProofPoints: string | null = null;
+    if (campaignIdParam) {
+      const camp = await prisma.campaign.findFirst({
+        where: { id: campaignIdParam, workspaceId: workspace.id },
+        select: { playbookJson: true, icp: true, proofPointsJson: true },
+      });
+      if (camp) {
+        campaignPlaybook = camp.playbookJson;
+        campaignIcp = camp.icp;
+        campaignProofPoints = camp.proofPointsJson;
+      }
     }
 
     const batch = await prisma.leadBatch.findFirst({
@@ -53,9 +69,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ done: 0, total, message: total === 0 ? "No leads to personalize." : "No leads in range." });
     }
 
+    const playbookSource = campaignPlaybook ?? workspace.playbookJson;
     let playbook: { steps: Array<{ subject: string; body: string; delayDays: number }> };
     try {
-      playbook = workspace.playbookJson ? JSON.parse(workspace.playbookJson) : { steps: [] };
+      playbook = playbookSource ? JSON.parse(playbookSource) : { steps: [] };
     } catch {
       return NextResponse.json({ error: "Invalid playbook. Generate and approve a playbook first." }, { status: 400 });
     }
@@ -71,12 +88,13 @@ export async function POST(request: Request) {
     const anthropicKey = decrypt(workspace.anthropicKey);
     const model = workspace.anthropicModel ?? undefined;
     const productSummary = workspace.productSummary ?? "";
-    const icp = workspace.icp ?? "";
+    const icp = (campaignIcp ?? workspace.icp) ?? "";
 
+    const proofPointsJsonSource = campaignProofPoints ?? workspace.proofPointsJson;
     let proofPointsText = "";
-    if (workspace.proofPointsJson) {
+    if (proofPointsJsonSource) {
       try {
-        const arr = JSON.parse(workspace.proofPointsJson) as Array<{ title?: string; text: string }>;
+        const arr = JSON.parse(proofPointsJsonSource) as Array<{ title?: string; text: string }>;
         if (Array.isArray(arr) && arr.length > 0) {
           proofPointsText = "\nProof points (weave in where relevant): " + arr.map((p) => (p.title ? `${p.title}: ${p.text}` : p.text)).join("; ");
         }

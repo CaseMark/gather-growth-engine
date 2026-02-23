@@ -17,13 +17,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput, accountEmails } = body as {
+    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput, accountEmails, campaignId: flowCampaignId } = body as {
       batchId?: string;
       abTest?: boolean;
       subjectLineA?: string;
       subjectLineB?: string;
       campaignName?: string;
       accountEmails?: string[];
+      campaignId?: string;
     };
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -47,7 +48,18 @@ export async function POST(request: Request) {
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
-    if (!workspace.playbookApproved) {
+
+    // When launching from Campaign flow (campaignId set), we use campaign playbook; otherwise require workspace playbook approved
+    let flowCampaign: { id: string; playbookJson: string | null } | null = null;
+    if (flowCampaignId) {
+      flowCampaign = await prisma.campaign.findFirst({
+        where: { id: flowCampaignId, workspaceId: workspace.id },
+        select: { id: true, playbookJson: true },
+      }) as { id: string; playbookJson: string | null } | null;
+      if (!flowCampaign) {
+        return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+      }
+    } else if (!workspace.playbookApproved) {
       return NextResponse.json({ error: "Approve your playbook before sending." }, { status: 400 });
     }
 
@@ -86,7 +98,8 @@ export async function POST(request: Request) {
         .replace(/\r\n/g, "\n")
         .replace(/\n/g, "<br>\n");
 
-    // Playbook steps (dynamic N, max 10) — sequence uses placeholders filled per lead via custom_variables
+    // Playbook steps: from Campaign if launching from flow, else workspace
+    const playbookSource = flowCampaign?.playbookJson ?? workspace.playbookJson;
     const MAX_STEPS = 10;
     let playbookSteps: Array<{ subject: string; body: string; delayDays: number }> = [
       { subject: "", body: "", delayDays: 0 },
@@ -94,7 +107,7 @@ export async function POST(request: Request) {
       { subject: "", body: "", delayDays: 5 },
     ];
     try {
-      const playbook = workspace.playbookJson ? (JSON.parse(workspace.playbookJson) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
+      const playbook = playbookSource ? (JSON.parse(playbookSource) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
       if (playbook?.steps?.length) {
         playbookSteps = playbook.steps.slice(0, MAX_STEPS).map((s) => ({
           subject: s.subject ?? "",
@@ -216,6 +229,7 @@ export async function POST(request: Request) {
         data: [
           {
             workspaceId: workspace.id,
+            campaignId: flowCampaign?.id ?? null,
             leadBatchId: batch.id,
             instantlyCampaignId: idA,
             name: nameA,
@@ -224,6 +238,7 @@ export async function POST(request: Request) {
           },
           {
             workspaceId: workspace.id,
+            campaignId: flowCampaign?.id ?? null,
             leadBatchId: batch.id,
             instantlyCampaignId: idB,
             name: nameB,
@@ -232,6 +247,9 @@ export async function POST(request: Request) {
           },
         ],
       });
+      if (flowCampaign?.id) {
+        await prisma.campaign.update({ where: { id: flowCampaign.id }, data: { status: "launched" } });
+      }
 
       const totalUploaded = resA.leads_uploaded + resB.leads_uploaded;
       return NextResponse.json({
@@ -283,11 +301,15 @@ export async function POST(request: Request) {
     await prisma.sentCampaign.create({
       data: {
         workspaceId: workspace.id,
+        campaignId: flowCampaign?.id ?? null,
         leadBatchId: batch.id,
         instantlyCampaignId: campaignId,
         name: campaignName,
       },
     });
+    if (flowCampaign?.id) {
+      await prisma.campaign.update({ where: { id: flowCampaign.id }, data: { status: "launched" } });
+    }
 
     return NextResponse.json({
       success: true,

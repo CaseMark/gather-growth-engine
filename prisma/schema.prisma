@@ -86,7 +86,25 @@ model Workspace {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   leadBatches    LeadBatch[]
   sentCampaigns SentCampaign[]
+  campaigns     Campaign[]
   performanceObservations PerformanceObservation[]
+}
+
+model Campaign {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String   // e.g. "Q1 Outbound"
+  status          String   // "draft" | "sequences_ready" | "launched"
+  playbookJson    String?  // { steps: [{ subject, body, delayDays }] }
+  icp             String?
+  proofPointsJson String?
+  leadBatchId     String?  // set when leads added for this campaign
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leadBatch   LeadBatch?    @relation(fields: [leadBatchId], references: [id], onDelete: SetNull)
+  sentCampaigns SentCampaign[]
 }
 
 model PerformanceObservation {
@@ -106,6 +124,7 @@ model PerformanceObservation {
 model SentCampaign {
   id                   String   @id @default(cuid())
   workspaceId          String
+  campaignId           String?  // when launched from a Campaign flow
   leadBatchId          String?
   instantlyCampaignId  String   // Instantly API campaign id
   name                 String   // campaign name in Instantly
@@ -114,7 +133,8 @@ model SentCampaign {
   createdAt            DateTime @default(now())
 
   workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  replies              CampaignReply[]
+  campaign  Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  replies   CampaignReply[]
 }
 
 model CampaignReply {
@@ -135,7 +155,8 @@ model LeadBatch {
   name        String?  // optional label
   createdAt   DateTime @default(now())
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
   leads     Lead[]
 }
 
