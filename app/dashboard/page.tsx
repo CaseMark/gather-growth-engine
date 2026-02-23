@@ -2565,6 +2565,13 @@ export default function DashboardPage() {
         />
       </aside>
       </div>
+      <footer className="border-t border-zinc-800 px-6 py-3">
+        <div className="mx-auto max-w-5xl text-center">
+          <a href="https://gatherhq.com" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-zinc-400">
+            Visit gatherhq.com
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

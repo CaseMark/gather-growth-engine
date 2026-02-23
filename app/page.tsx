@@ -51,6 +51,9 @@ export default function HomePage() {
             personalize every email per lead, send via Instantly, and tune for
             opens and replies. No SDR required.
           </p>
+          <p className="mt-3 text-sm text-zinc-500">
+            You bring your own <strong className="text-zinc-400">Anthropic</strong> and <strong className="text-zinc-400">Instantly</strong> API keys — we never charge for usage.
+          </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/signup"
@@ -106,6 +109,9 @@ export default function HomePage() {
             </h2>
             <p className="mt-3 text-zinc-400">
               Get going at no cost. No credit card, no trial countdown. We want you to run outbound without lock-in.
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              You provide your own <strong className="text-zinc-400">Anthropic</strong> and <strong className="text-zinc-400">Instantly</strong> API keys during onboarding; we don&apos;t store or charge for them.
             </p>
             <h2 className="mt-10 text-xl font-semibold text-zinc-100 sm:text-2xl">
               Open source — fork and own it
@@ -167,7 +173,10 @@ export default function HomePage() {
       <footer className="border-t border-zinc-800 px-6 py-8">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 sm:flex-row">
           <span className="text-sm text-zinc-500">{APP_DISPLAY_NAME}</span>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <a href="https://gatherhq.com" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-zinc-400">
+              Visit gatherhq.com
+            </a>
             <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-zinc-400">
               GitHub
             </a>
