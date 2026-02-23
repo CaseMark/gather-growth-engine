@@ -267,7 +267,7 @@ export default function SentCampaignDetailPage() {
 
           {/* Emails sent — paginated, click any to read full content */}
           {sent.leadBatch && sent.leadBatch.leads.length > 0 && (() => {
-            const PAGE_SIZE = 20;
+            const PAGE_SIZE = 10;
             const total = sent.leadBatch.leads.length;
             const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
             const page = Math.min(emailsPage, totalPages);

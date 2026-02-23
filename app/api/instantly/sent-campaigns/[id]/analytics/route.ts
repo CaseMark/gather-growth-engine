@@ -88,7 +88,11 @@ export async function GET(
       bounced_count: analytics.bounced_count,
       contacted_count: analytics.contacted_count,
       leads_count: analytics.leads_count,
-      suggestion: openRate < 15 && sentCount > 20 ? "Try testing a different subject line to improve open rate." : null,
+      suggestion: openRate < 15 && sentCount > 20 && opens > 0
+        ? "Try testing a different subject line to improve open rate."
+        : openRate === 0 && sentCount > 0
+          ? "Open rate is 0%. Many tools don't track opens on the first email for deliverability, so this may not mean no one opened."
+          : null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch analytics";
