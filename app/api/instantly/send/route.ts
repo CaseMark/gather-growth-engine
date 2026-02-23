@@ -214,8 +214,8 @@ export async function POST(request: Request) {
     if (abTest) {
       // A/B: assign leads 50/50, create two campaigns, record with abGroupId
       const abGroupId = `ab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const leadsA: typeof leadsWithContent = [];
-      const leadsB: typeof leadsWithContent = [];
+      const leadsA: typeof leadsPassingAllSteps = [];
+      const leadsB: typeof leadsPassingAllSteps = [];
       leadsPassingAllSteps.forEach((l, i) => {
         if (i % 2 === 0) leadsA.push(l);
         else leadsB.push(l);
