@@ -43,19 +43,28 @@ export async function POST(request: Request) {
       },
     });
 
-    // Send verification email (in dev, link is printed in this terminal)
+    // Send verification email (required for flow; roll back user if email can't be sent)
     try {
       await sendVerificationEmail(email, verificationToken, name || email);
     } catch (emailError) {
+      const msg = emailError instanceof Error ? emailError.message : "Failed to send verification email";
       console.error("Failed to send verification email:", emailError);
-      // Don't fail signup if email fails - user can request resend later
+      await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+      return NextResponse.json(
+        {
+          error: "Verification email could not be sent.",
+          details: msg,
+          hint: "Set RESEND_API_KEY (and optionally RESEND_FROM_EMAIL) in your environment. Use onboarding@resend.dev or a verified domain.",
+        },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json(
-      { 
+      {
         message: "User created successfully. Please check your email to verify your account.",
         userId: user.id,
-        requiresVerification: true
+        requiresVerification: true,
       },
       { status: 201 }
     );

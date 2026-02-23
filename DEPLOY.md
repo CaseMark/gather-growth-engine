@@ -1,5 +1,7 @@
 # Deployment Guide
 
+**How we deploy (after repo is connected to Vercel/Railway):** Push to GitHub. No `vercel` CLI — the connected Vercel/Railway project builds automatically from the branch you push. Run `npx prisma migrate deploy` if you changed the DB schema (e.g. locally where production DB is reachable).
+
 ## Quick Deploy
 
 ### Option 1: Vercel (Recommended for Next.js)
@@ -47,6 +49,10 @@
 - `DATABASE_URL` - Postgres connection string (production) or SQLite file path (local)
 - `NEXTAUTH_URL` - Your app URL (e.g., `https://your-app.vercel.app`)
 - `NEXTAUTH_SECRET` - Secret key (generate with `openssl rand -base64 32`)
+
+**Required for signup verification emails:**
+- `RESEND_API_KEY` - From [resend.com](https://resend.com) (free tier). Omit = signup will fail with a clear error until set.
+- `RESEND_FROM_EMAIL` - Optional. Defaults to `onboarding@resend.dev`; use a verified domain if you prefer.
 
 **Optional (for future features):**
 - User-provided API keys stored in DB (Anthropic, Instantly, etc.)
