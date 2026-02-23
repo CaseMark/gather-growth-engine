@@ -158,6 +158,30 @@ export async function POST(request: Request) {
 
     const numSteps = sequenceSteps.length;
 
+    // Only send leads that have personalized content (avoid sending blank emails)
+    const leadsWithContent = batch.leads.filter((l) => {
+      const steps = getLeadSteps(l as LeadWithSteps, numSteps);
+      const first = steps[0];
+      return (first?.subject?.trim() || first?.body?.trim()) ?? false;
+    });
+
+    if (leadsWithContent.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No leads have personalized content. Generate sequences for this batch first (Sequences step: run \"Generate sequences & Next\" until all leads are done). Leads without content are not sent.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (leadsWithContent.length < batch.leads.length) {
+      // Log so we can see it in server logs; response will still indicate leads_uploaded
+      console.warn(
+        `[Instantly send] Skipping ${batch.leads.length - leadsWithContent.length} leads with no content; sending ${leadsWithContent.length}`
+      );
+    }
+
     const campaignOptionsWithSequence = {
       ...(selectedEmails != null && selectedEmails.length > 0 ? { email_list: selectedEmails } : {}),
       ...(sequenceSteps.length > 0 ? { sequenceSteps } : {}),
@@ -166,9 +190,9 @@ export async function POST(request: Request) {
     if (abTest) {
       // A/B: assign leads 50/50, create two campaigns, record with abGroupId
       const abGroupId = `ab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const leadsA: typeof batch.leads = [];
-      const leadsB: typeof batch.leads = [];
-      batch.leads.forEach((l, i) => {
+      const leadsA: typeof leadsWithContent = [];
+      const leadsB: typeof leadsWithContent = [];
+      leadsWithContent.forEach((l, i) => {
         if (i % 2 === 0) leadsA.push(l);
         else leadsB.push(l);
       });
@@ -183,7 +207,7 @@ export async function POST(request: Request) {
       });
 
       const toPayload = (
-        list: typeof batch.leads,
+        list: typeof leadsWithContent,
         subjectLineOverride: string
       ) =>
         list.map((l) => {
@@ -275,7 +299,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Instantly did not return campaign id" }, { status: 500 });
     }
 
-    const leadsPayload = batch.leads.map((l) => {
+    const leadsPayload = leadsWithContent.map((l) => {
       const steps = getLeadSteps(l, numSteps);
       const custom_variables: Record<string, string> = {};
       steps.forEach((s, i) => {
