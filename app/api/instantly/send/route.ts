@@ -157,55 +157,52 @@ export async function POST(request: Request) {
     };
 
     const numSteps = sequenceSteps.length;
-
-    // Only send leads that have personalized content (avoid sending blank emails)
-    const leadsWithContent = batch.leads.filter((l) => {
-      const steps = getLeadSteps(l as LeadWithSteps, numSteps);
-      const first = steps[0];
-      return (first?.subject?.trim() || first?.body?.trim()) ?? false;
-    });
-
-    if (leadsWithContent.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "No leads have personalized content. Generate sequences for this batch first (Sequences step: run \"Generate sequences & Next\" until all leads are done). Leads without content are not sent.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (leadsWithContent.length < batch.leads.length) {
-      console.warn(
-        `[Instantly send] Skipping ${batch.leads.length - leadsWithContent.length} leads with no content; sending ${leadsWithContent.length}`
-      );
-    }
-
-    // Quality gate: every email must meet minimum bar (no stub/placeholder sends)
     const MIN_SUBJECT_LENGTH = 10;
     const MIN_BODY_LENGTH = 50;
-    const qualityFails: string[] = [];
-    for (const l of leadsWithContent) {
+
+    // Quality gate: EVERY step of EVERY lead must pass (no blank emails, no stub content)
+    type StepFail = { leadEmail: string; stepIndex: number; reason: string };
+    const stepFails: StepFail[] = [];
+    const leadsPassingAllSteps = batch.leads.filter((l) => {
       const steps = getLeadSteps(l as LeadWithSteps, numSteps);
-      const first = steps[0];
-      const subj = (first?.subject ?? "").trim();
-      const body = (first?.body ?? "").trim();
-      if (subj.length < MIN_SUBJECT_LENGTH) {
-        qualityFails.push(`${l.email}: subject too short (${subj.length} chars, min ${MIN_SUBJECT_LENGTH})`);
+      for (let i = 0; i < steps.length; i++) {
+        const subj = (steps[i]?.subject ?? "").trim();
+        const body = (steps[i]?.body ?? "").trim();
+        if (subj.length < MIN_SUBJECT_LENGTH) {
+          stepFails.push({ leadEmail: l.email, stepIndex: i + 1, reason: `subject too short (${subj.length} chars, min ${MIN_SUBJECT_LENGTH})` });
+          return false;
+        }
+        if (body.length < MIN_BODY_LENGTH) {
+          stepFails.push({ leadEmail: l.email, stepIndex: i + 1, reason: `body too short (${body.length} chars, min ${MIN_BODY_LENGTH})` });
+          return false;
+        }
       }
-      if (body.length < MIN_BODY_LENGTH) {
-        qualityFails.push(`${l.email}: body too short (${body.length} chars, min ${MIN_BODY_LENGTH})`);
-      }
-    }
-    if (qualityFails.length > 0) {
+      return true;
+    });
+
+    if (leadsPassingAllSteps.length === 0) {
+      const byStep = new Map<number, number>();
+      stepFails.forEach((f) => byStep.set(f.stepIndex, (byStep.get(f.stepIndex) ?? 0) + 1));
       return NextResponse.json(
         {
           error:
-            "Quality check failed. Every email must have a subject ≥10 characters and body ≥50 characters. Fix or regenerate sequences for these leads, then try again.",
-          details: qualityFails.slice(0, 20),
-          totalFailing: qualityFails.length,
+            "Quality check failed. Every step of every lead must have subject ≥10 characters and body ≥50 characters. No leads passed. Fix or regenerate sequences, then try again.",
+          validation: {
+            numSteps,
+            totalLeads: batch.leads.length,
+            leadsPassingAllSteps: 0,
+            failsByStep: Object.fromEntries(byStep),
+            sampleFails: stepFails.slice(0, 15),
+          },
         },
         { status: 400 }
+      );
+    }
+
+    // We only send leads that pass ALL steps. If some fail, we still allow send with the passing subset (UI shows validation).
+    if (leadsPassingAllSteps.length < batch.leads.length) {
+      console.warn(
+        `[Instantly send] ${batch.leads.length - leadsPassingAllSteps.length} leads failed quality for all steps; sending ${leadsPassingAllSteps.length}`
       );
     }
 
@@ -219,7 +216,7 @@ export async function POST(request: Request) {
       const abGroupId = `ab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const leadsA: typeof leadsWithContent = [];
       const leadsB: typeof leadsWithContent = [];
-      leadsWithContent.forEach((l, i) => {
+      leadsPassingAllSteps.forEach((l, i) => {
         if (i % 2 === 0) leadsA.push(l);
         else leadsB.push(l);
       });
@@ -234,7 +231,7 @@ export async function POST(request: Request) {
       });
 
       const toPayload = (
-        list: typeof leadsWithContent,
+        list: typeof leadsPassingAllSteps,
         subjectLineOverride: string
       ) =>
         list.map((l) => {
@@ -249,7 +246,6 @@ export async function POST(request: Request) {
             first_name: l.name?.split(/\s+/)[0] ?? null,
             last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
             company_name: l.company ?? null,
-            personalization: bodyWithLineBreaks(steps[0]?.body ?? "").trim() || undefined,
             custom_variables,
           };
         });
@@ -323,7 +319,8 @@ export async function POST(request: Request) {
         leads_uploaded: totalUploaded,
         duplicated_leads: resA.duplicated_leads + resB.duplicated_leads,
         in_blocklist: resA.in_blocklist + resB.in_blocklist,
-        message: `A/B campaigns "${nameA}" and "${nameB}" created and activated (${leadsA.length} vs ${leadsB.length} leads).`,
+        validation: { numSteps, leadsSent: leadsA.length + leadsB.length, allStepsPassed: true },
+        message: `A/B campaigns "${nameA}" and "${nameB}" created and activated (${leadsA.length} vs ${leadsB.length} leads). Each step sent as a separate email.`,
       });
     }
 
@@ -341,7 +338,7 @@ export async function POST(request: Request) {
     ]).flat();
     await client.addCampaignVariables(campaignId, stepVariableNames);
 
-    const leadsPayload = leadsWithContent.map((l) => {
+    const leadsPayload = leadsPassingAllSteps.map((l) => {
       const steps = getLeadSteps(l, numSteps);
       const custom_variables: Record<string, string> = {};
       steps.forEach((s, i) => {
@@ -353,7 +350,6 @@ export async function POST(request: Request) {
         first_name: l.name?.split(/\s+/)[0] ?? null,
         last_name: l.name?.split(/\s+/).slice(1).join(" ") || null,
         company_name: l.company ?? null,
-        personalization: bodyWithLineBreaks(steps[0]?.body ?? "").trim() || undefined,
         custom_variables,
       };
     });
@@ -384,7 +380,8 @@ export async function POST(request: Request) {
       leads_uploaded: addResult.leads_uploaded,
       duplicated_leads: addResult.duplicated_leads,
       in_blocklist: addResult.in_blocklist,
-      message: `Campaign "${campaignName}" created and activated. Cold inboxes 5/day; warm inboxes 30/day. Sequence steps have 2–3 day gaps.`,
+      validation: { numSteps, leadsSent: leadsPassingAllSteps.length, allStepsPassed: true },
+      message: `Campaign "${campaignName}" created and activated. ${leadsPassingAllSteps.length} leads; each of ${numSteps} steps goes out as a separate email with 2–3 day gaps.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send to Instantly";

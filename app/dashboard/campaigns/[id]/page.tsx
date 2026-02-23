@@ -49,6 +49,17 @@ export default function CampaignPage() {
   const [instantlyAccounts, setInstantlyAccounts] = useState<Array<{ email: string }>>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [selectedAccountEmails, setSelectedAccountEmails] = useState<string[] | null>(null);
+  const [validation, setValidation] = useState<{
+    numSteps: number;
+    totalLeads: number;
+    leadsPassingAllSteps: number;
+    canSend: boolean;
+    steps: Array<{ step: number; passed: number; failed: number; passedAllLeads: boolean; sampleFailures: string[] }>;
+  } | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
 
   useEffect(() => {
     if (!id || !session?.user?.id) return;
@@ -107,6 +118,32 @@ export default function CampaignPage() {
       .catch(() => {})
       .finally(() => setAccountsLoading(false));
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (step !== "send" || !campaign?.leadBatchId || !id) {
+      setValidation(null);
+      return;
+    }
+    setValidationLoading(true);
+    fetch(`/api/instantly/send/validate?batchId=${encodeURIComponent(campaign.leadBatchId)}&campaignId=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.numSteps != null) {
+          setValidation({
+            numSteps: data.numSteps,
+            totalLeads: data.totalLeads,
+            leadsPassingAllSteps: data.leadsPassingAllSteps,
+            canSend: data.canSend === true,
+            steps: data.steps ?? [],
+          });
+          if (!testEmail && session?.user?.email) setTestEmail(session.user.email);
+        } else {
+          setValidation(null);
+        }
+      })
+      .catch(() => setValidation(null))
+      .finally(() => setValidationLoading(false));
+  }, [step, campaign?.leadBatchId, id, session?.user?.email]);
 
   const savePlaybookAndNext = async () => {
     if (!id) return;
@@ -194,9 +231,41 @@ export default function CampaignPage() {
     }
   };
 
+  const handleTestCampaign = async () => {
+    if (!id || !campaign?.leadBatchId || !campaignNameInput.trim() || !testEmail.trim()) {
+      setTestMessage("Campaign name, lead list, and test email are required.");
+      return;
+    }
+    setTestSending(true);
+    setTestMessage("");
+    try {
+      const res = await fetch("/api/instantly/send/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId: campaign.leadBatchId,
+          campaignName: campaignNameInput.trim(),
+          testEmail: testEmail.trim(),
+          campaignId: id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Test send failed");
+      setTestMessage(data.message ?? `Test campaign sent to ${testEmail}. Check your inbox for each step as a separate email.`);
+    } catch (e) {
+      setTestMessage(e instanceof Error ? e.message : "Test send failed");
+    } finally {
+      setTestSending(false);
+    }
+  };
+
   const handleLaunch = async () => {
     if (!id || !campaign?.leadBatchId || !campaignNameInput.trim()) {
       setSendError("Campaign name and lead list are required.");
+      return;
+    }
+    if (validation && validation.leadsPassingAllSteps === 0) {
+      setSendError("No leads pass the quality check for all steps. Fix or regenerate sequences.");
       return;
     }
     setSending(true);
@@ -382,9 +451,44 @@ export default function CampaignPage() {
               )}
 
               {step === "send" && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <h2 className="text-lg font-medium text-zinc-200">Configure & launch</h2>
-                  <p className="text-sm text-zinc-500">Set campaign name and which Instantly mailboxes to use. Then launch.</p>
+                  <p className="text-sm text-zinc-500">Each step goes out as a separate email. Verify quality and send a test first.</p>
+
+                  {/* Email quality check — each step must pass */}
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+                    <h3 className="text-sm font-medium text-zinc-300 mb-2">Email quality check</h3>
+                    <p className="text-xs text-zinc-500 mb-3">Every step of every lead must have subject ≥10 chars and body ≥50 chars. No blank emails.</p>
+                    {validationLoading ? (
+                      <p className="text-sm text-zinc-500">Loading…</p>
+                    ) : validation?.steps?.length ? (
+                      <ul className="space-y-2">
+                        {validation.steps.map((s) => (
+                          <li key={s.step} className="flex items-center gap-3 text-sm">
+                            {s.passedAllLeads ? (
+                              <span className="text-emerald-400 font-medium" title="Passed">✓</span>
+                            ) : (
+                              <span className="text-amber-400 font-medium" title="Some leads fail">✗</span>
+                            )}
+                            <span className="text-zinc-300">Email step {s.step}</span>
+                            {s.passedAllLeads ? (
+                              <span className="text-zinc-500">Passed ({validation.totalLeads} leads)</span>
+                            ) : (
+                              <span className="text-amber-400">{s.failed} lead(s) fail — {s.sampleFailures?.[0] ?? "fix content"}</span>
+                            )}
+                          </li>
+                        ))}
+                        <li className="text-zinc-500 text-xs mt-2">
+                          {validation.canSend
+                            ? `${validation.leadsPassingAllSteps} leads ready to send. Each of ${validation.numSteps} steps will go out as a separate email.`
+                            : `Only ${validation.leadsPassingAllSteps} of ${validation.totalLeads} leads pass all steps. Fix or remove failing leads.`}
+                        </li>
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-zinc-500">Select a lead list and generate sequences to see the check.</p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-sm text-zinc-400 mb-1">Campaign name</label>
                     <input
@@ -394,6 +498,38 @@ export default function CampaignPage() {
                       className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
                     />
                   </div>
+
+                  {/* Test campaign — send multi-step to one email */}
+                  <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-4">
+                    <h3 className="text-sm font-medium text-amber-200 mb-2">Test campaign first</h3>
+                    <p className="text-xs text-zinc-500 mb-3">Send the exact multi-step sequence to your email. You’ll get each step as a separate email so you can confirm before launching for real.</p>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="block text-xs text-zinc-500 mb-1">Test email</label>
+                        <input
+                          type="email"
+                          value={testEmail}
+                          onChange={(e) => setTestEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleTestCampaign}
+                        disabled={testSending || !campaignNameInput.trim() || !campaign.leadBatchId || !testEmail.trim()}
+                        className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                      >
+                        {testSending ? "Sending test…" : "Send test to my email"}
+                      </button>
+                    </div>
+                    {testMessage && (
+                      <p className={`mt-3 text-sm ${testMessage.startsWith("Test campaign") || testMessage.includes("Check your inbox") ? "text-emerald-400" : "text-amber-400"}`}>
+                        {testMessage}
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-sm text-zinc-400 mb-1">Instantly accounts</label>
                     {accountsLoading ? <p className="text-zinc-500 text-sm">Loading…</p> : (
@@ -405,7 +541,7 @@ export default function CampaignPage() {
                   {sendError && <div className="rounded-md bg-red-900/20 border border-red-800 px-4 py-2 text-sm text-red-300">{sendError}</div>}
                   <button
                     onClick={handleLaunch}
-                    disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId}
+                    disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && validation.leadsPassingAllSteps === 0)}
                     className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     {sending ? "Launching…" : "Launch campaign"}
