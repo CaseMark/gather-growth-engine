@@ -276,9 +276,19 @@ export default function CampaignPage() {
           {isLaunched ? (
             <div className="space-y-6">
               <p className="text-zinc-400">This campaign has been launched. Sent campaigns: {campaign.sentCampaigns.length}. Total leads: {leadCount}.</p>
-              <Link href="/dashboard" className="inline-flex rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500">
-                Back to dashboard
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                {campaign.sentCampaigns?.length > 0 && (
+                  <Link
+                    href={`/dashboard/sent/${campaign.sentCampaigns[0].id}`}
+                    className="inline-flex rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+                  >
+                    View stats, emails & playbook →
+                  </Link>
+                )}
+                <Link href="/dashboard" className="inline-flex rounded-md border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800">
+                  Back to dashboard
+                </Link>
+              </div>
             </div>
           ) : (
             <>

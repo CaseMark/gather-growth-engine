@@ -249,7 +249,14 @@ export default function DashboardPage() {
                           <td className="px-6 py-4 text-zinc-500">
                             {new Date(s.createdAt).toLocaleDateString()}
                           </td>
-                          <td className="px-6 py-4 text-zinc-500">—</td>
+                          <td className="px-6 py-4">
+                            <Link
+                              href={`/dashboard/sent/${s.id}`}
+                              className="text-emerald-500 hover:text-emerald-400 font-medium"
+                            >
+                              View →
+                            </Link>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
