@@ -109,6 +109,19 @@ export async function POST(
 
     const steps = getSteps(templateLead);
 
+    const MIN_SUBJECT_LENGTH = 10;
+    const MIN_BODY_LENGTH = 50;
+    for (let i = 0; i < steps.length; i++) {
+      const subj = (steps[i]?.subject ?? "").trim();
+      const body = (steps[i]?.body ?? "").trim();
+      if (subj.length < MIN_SUBJECT_LENGTH || body.length < MIN_BODY_LENGTH) {
+        return NextResponse.json(
+          { error: `Step ${i + 1} has insufficient content (subject ≥10 chars, body ≥50 chars). Regenerate sequences.` },
+          { status: 400 }
+        );
+      }
+    }
+
     const bodyWithLineBreaks = (text: string) =>
       (text ?? "").replace(/\r\n/g, "\n").replace(/\n/g, "<br>\n");
 
