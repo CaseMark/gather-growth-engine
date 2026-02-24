@@ -157,6 +157,8 @@ THIS LEAD:
 
 Write ${numSteps} emails. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.
 
+CRITICAL: Sign off as the SENDER (you/your sales team), NOT as the recipient. Never use the recipient's name in the signature. Use their name only in the greeting (e.g. "Hey Bo,"). For the sign-off, use a sender name like "Best, [Your name]" or "The team at [Company]" — never the recipient's name.
+
 Respond with ONLY a valid JSON object with keys ${stepKeys}. Each step: { "subject": "...", "body": "..." }
 Example: {${stepExample}}`;
 
