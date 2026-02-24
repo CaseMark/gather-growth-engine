@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
 import { callAnthropic } from "@/lib/anthropic";
 import { getAggregatedMemory } from "@/lib/performance-memory";
+import { parsePlaybook } from "@/lib/playbook";
 
 // Allow up to 60s so a few Anthropic calls can finish (Vercel Pro; Hobby may still cap at 10s)
 export const maxDuration = 60;
@@ -70,20 +71,20 @@ export async function POST(request: Request) {
     }
 
     const playbookSource = campaignPlaybook ?? workspace.playbookJson;
-    let playbook: { steps: Array<{ subject: string; body: string; delayDays: number }> };
-    try {
-      playbook = playbookSource ? JSON.parse(playbookSource) : { steps: [] };
-    } catch {
-      return NextResponse.json({ error: "Invalid playbook. Generate and approve a playbook first." }, { status: 400 });
+    const parsed = parsePlaybook(playbookSource);
+    if (!parsed) {
+      return NextResponse.json({ error: "Invalid playbook. Define guidelines first." }, { status: 400 });
     }
 
-    const MAX_STEPS = 10;
-    const steps = playbook.steps.slice(0, MAX_STEPS);
-    if (steps.length === 0) {
-      return NextResponse.json({ error: "Playbook has no steps." }, { status: 400 });
-    }
-    const stepKeys = steps.map((_, i) => `step${i + 1}`).join(", ");
-    const stepExample = steps.map((_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
+    const { numSteps, guidelines, legacySteps } = parsed;
+    const stepKeys = Array.from({ length: numSteps }, (_, i) => `step${i + 1}`).join(", ");
+    const stepExample = Array.from({ length: numSteps }, (_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
+
+    const structureBlock = guidelines?.structure
+      ? `\nPlaybook structure (follow this flow, but write completely custom content for this lead):\n${guidelines.structure}\nTone: ${guidelines.tone}`
+      : legacySteps?.length
+        ? `\nRough flow (adapt freely, write custom content): ${legacySteps.map((s, i) => `Step ${i + 1}: ${(s.subject || "").slice(0, 50)}`).join(" → ")}`
+        : "";
 
     const anthropicKey = decrypt(workspace.anthropicKey);
     const model = workspace.anthropicModel ?? undefined;
@@ -110,10 +111,6 @@ export async function POST(request: Request) {
       memory = null;
     }
 
-    const templatesJson = steps
-      .map((s, i) => `Step ${i + 1} subject: ${s.subject}\nStep ${i + 1} body: ${s.body}`)
-      .join("\n\n");
-
     let usageTotal = { input_tokens: 0, output_tokens: 0 };
     const leadIds: string[] = [];
 
@@ -134,22 +131,21 @@ export async function POST(request: Request) {
         }
       }
 
-      const prompt = `You are writing a personalized cold outreach SEQUENCE (${steps.length} emails) for one lead. Personalize each step for this lead by using their actual name, company, job title, and industry directly in the text. Do NOT use placeholders like {{firstName}} or {{company}}—write the real values (e.g. "Hey, David," not "Hey, {{firstName}},"). Keep structure and length.
+      const prompt = `You are writing a HYPER-PERSONALIZED cold outreach sequence (${numSteps} emails) for ONE specific lead. Write COMPLETELY custom emails for this person — not templates. Each email should feel like it was written specifically for them based on their role, company, industry, and how your product helps people like them.
 
 Product summary: ${productSummary}
-ICP: ${icp}${proofPointsText}${strategyBlock}
+ICP: ${icp}${proofPointsText}${structureBlock}${strategyBlock}
 
-Lead:
+THIS LEAD:
 - Email: ${lead.email}
 - Name: ${lead.name ?? "unknown"}
 - Job title: ${lead.jobTitle ?? "unknown"}
 - Company: ${lead.company ?? "unknown"}
 - Industry: ${lead.industry ?? "unknown"}${lead.persona || lead.vertical ? `\n- Persona: ${lead.persona ?? ""}\n- Vertical: ${lead.vertical ?? ""}` : ""}
 
-Templates (personalize each for this lead):
-${templatesJson}
+Write ${numSteps} emails. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.
 
-Respond with ONLY a valid JSON object with keys ${stepKeys} (only include steps that exist in the templates above). Each step: { "subject": "...", "body": "..." }
+Respond with ONLY a valid JSON object with keys ${stepKeys}. Each step: { "subject": "...", "body": "..." }
 Example: {${stepExample}}`;
 
       try {
@@ -164,12 +160,12 @@ Example: {${stepExample}}`;
         if (codeBlock) jsonStr = codeBlock[1].trim();
         const parsed = JSON.parse(jsonStr) as Record<string, { subject?: string; body?: string }>;
 
-        const stepsArray = steps.map((s, i) => {
+        const stepsArray = Array.from({ length: numSteps }, (_, i) => {
           const key = `step${i + 1}`;
           const step = parsed[key];
           return {
-            subject: (step?.subject ?? s.subject) || "",
-            body: (step?.body ?? s.body) || "",
+            subject: (step?.subject ?? "").trim(),
+            body: (step?.body ?? "").trim(),
           };
         });
         const update: Record<string, string | null> = {
@@ -194,7 +190,7 @@ Example: {${stepExample}}`;
         });
       } catch (err) {
         console.error(`Lead ${lead.id} personalize error:`, err);
-        const fallbackSteps = steps.map((s) => ({ subject: s.subject, body: s.body }));
+        const fallbackSteps = Array.from({ length: numSteps }, () => ({ subject: "", body: "" }));
         const fallback: Record<string, string | null> = {
           stepsJson: JSON.stringify(fallbackSteps),
           step1Subject: fallbackSteps[0]?.subject ?? null,
@@ -216,7 +212,7 @@ Example: {${stepExample}}`;
       total,
       leadIds,
       usage: usageTotal.input_tokens > 0 || usageTotal.output_tokens > 0 ? usageTotal : undefined,
-      message: `Personalized ${chunk.length} lead(s), ${steps.length} steps each.`,
+      message: `Personalized ${chunk.length} lead(s), ${numSteps} steps each.`,
     });
   } catch (error: any) {
     console.error("Leads generate error:", error);

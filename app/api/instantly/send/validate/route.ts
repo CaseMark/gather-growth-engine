@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePlaybook } from "@/lib/playbook";
 
 const MIN_SUBJECT_LENGTH = 10;
 const MIN_BODY_LENGTH = 50;
-const MAX_STEPS = 10;
 
 /**
  * GET /api/instantly/send/validate?batchId=...&campaignId=...
@@ -43,23 +43,8 @@ export async function GET(request: Request) {
       if (campaign?.playbookJson) playbookSource = campaign.playbookJson;
     }
 
-    let playbookSteps: Array<{ subject: string; body: string; delayDays: number }> = [
-      { subject: "", body: "", delayDays: 0 },
-      { subject: "", body: "", delayDays: 3 },
-      { subject: "", body: "", delayDays: 5 },
-    ];
-    try {
-      const playbook = playbookSource ? (JSON.parse(playbookSource) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
-      if (playbook?.steps?.length) {
-        playbookSteps = playbook.steps.slice(0, MAX_STEPS).map((s) => ({
-          subject: s.subject ?? "",
-          body: s.body ?? "",
-          delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
-        }));
-      }
-    } catch {
-      // use default
-    }
+    const parsed = parsePlaybook(playbookSource);
+    const numSteps = parsed?.numSteps ?? 3;
 
     const batch = await prisma.leadBatch.findFirst({
       where: { id: batchId, workspaceId: workspace.id },
@@ -68,8 +53,6 @@ export async function GET(request: Request) {
     if (!batch) {
       return NextResponse.json({ error: "Batch not found" }, { status: 404 });
     }
-
-    const numSteps = playbookSteps.length;
 
     type LeadWithSteps = (typeof batch.leads)[0] & { stepsJson?: string | null };
     const getLeadSteps = (lead: LeadWithSteps, n: number): Array<{ subject: string; body: string }> => {

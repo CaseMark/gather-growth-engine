@@ -8,6 +8,7 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
 type Step = { stepNumber: number; subject: string; body: string; delayDays: number };
+type Guidelines = { tone: string; structure: string; numSteps: number; stepDelays: number[] };
 
 export default function SentCampaignDetailPage() {
   const params = useParams();
@@ -36,6 +37,7 @@ export default function SentCampaignDetailPage() {
   const [memory, setMemory] = useState<{ byPersona?: Record<string, unknown>; byVertical?: Record<string, unknown>; suggestion?: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [playbookSteps, setPlaybookSteps] = useState<Step[]>([]);
+  const [playbookGuidelines, setPlaybookGuidelines] = useState<Guidelines | null>(null);
   const [savingPlaybook, setSavingPlaybook] = useState(false);
   const [playbookSaved, setPlaybookSaved] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -63,15 +65,21 @@ export default function SentCampaignDetailPage() {
           setWorkspacePlaybook(detailRes.workspacePlaybook ?? null);
           const playbookSource = detailRes.sentCampaign.campaign?.playbookJson ?? detailRes.workspacePlaybook;
           let steps: Step[] = [];
+          let guidelines: Guidelines | null = null;
           if (playbookSource) {
             try {
-              const pb = JSON.parse(playbookSource) as { steps?: Step[] };
-              if (pb?.steps?.length) steps = pb.steps;
+              const pb = JSON.parse(playbookSource) as { guidelines?: Guidelines; steps?: Step[] };
+              if (pb?.guidelines) {
+                guidelines = pb.guidelines;
+                steps = [];
+              } else if (pb?.steps?.length) {
+                steps = pb.steps;
+              }
             } catch {
               //
             }
           }
-          if (steps.length === 0) {
+          if (steps.length === 0 && !guidelines) {
             steps = [
               { stepNumber: 1, subject: "", body: "", delayDays: 0 },
               { stepNumber: 2, subject: "", body: "", delayDays: 3 },
@@ -79,6 +87,7 @@ export default function SentCampaignDetailPage() {
             ];
           }
           setPlaybookSteps(steps);
+          setPlaybookGuidelines(guidelines);
         }
         if (!analyticsRes.error && analyticsRes.emails_sent_count !== undefined) setAnalytics(analyticsRes);
         if (repliesRes.replies) setReplies(repliesRes.replies);
@@ -97,7 +106,9 @@ export default function SentCampaignDetailPage() {
     setSavingPlaybook(true);
     setPlaybookSaved(false);
     try {
-      const playbookJson = JSON.stringify({ steps: playbookSteps });
+      const playbookJson = playbookGuidelines
+        ? JSON.stringify({ guidelines: playbookGuidelines })
+        : JSON.stringify({ steps: playbookSteps });
       if (sent.campaignId && sent.campaign?.id) {
         const res = await fetch(`/api/campaigns/${sent.campaign.id}`, {
           method: "PATCH",
@@ -109,7 +120,9 @@ export default function SentCampaignDetailPage() {
         const res = await fetch("/api/playbook", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ playbook: { steps: playbookSteps } }),
+          body: JSON.stringify(
+            playbookGuidelines ? { playbook: { guidelines: playbookGuidelines } } : { playbook: { steps: playbookSteps } }
+          ),
         });
         if (!res.ok) throw new Error("Failed to save");
       }
@@ -218,7 +231,7 @@ export default function SentCampaignDetailPage() {
               <button
                 type="button"
                 onClick={() => setPlaybookAiOpen((v) => !v)}
-                disabled={playbookSteps.length === 0}
+                disabled={!playbookGuidelines && playbookSteps.length === 0}
                 className="rounded-md border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Update with AI
@@ -230,7 +243,7 @@ export default function SentCampaignDetailPage() {
                   type="text"
                   value={playbookAiInput}
                   onChange={(e) => setPlaybookAiInput(e.target.value)}
-                  placeholder="e.g. Make step 2 shorter, add more urgency to subject lines"
+                  placeholder={playbookGuidelines ? "e.g. Make step 2 more urgent" : "e.g. Make step 2 shorter, add more urgency"}
                   className="flex-1 min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
                 />
                 <button
@@ -239,17 +252,26 @@ export default function SentCampaignDetailPage() {
                     if (!playbookAiInput.trim()) return;
                     setPlaybookAiLoading(true);
                     try {
+                      const ctx = playbookGuidelines
+                        ? { guidelines: playbookGuidelines }
+                        : { steps: playbookSteps };
                       const res = await fetch("/api/chat", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          message: playbookAiInput.trim(),
-                          context: { steps: playbookSteps },
-                        }),
+                        body: JSON.stringify({ message: playbookAiInput.trim(), context: ctx }),
                       });
                       const data = await res.json();
                       if (data.error) throw new Error(data.error);
-                      if (data.edits?.steps?.length) {
+                      if (data.edits?.guidelines && playbookGuidelines) {
+                        const g = data.edits.guidelines;
+                        setPlaybookGuidelines((prev) => prev ? {
+                          tone: g.tone ?? prev.tone,
+                          structure: g.structure ?? prev.structure,
+                          numSteps: g.numSteps ?? prev.numSteps,
+                          stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : prev.stepDelays,
+                        } : null);
+                        setPlaybookSaved(false);
+                      } else if (data.edits?.steps?.length) {
                         const edited = data.edits.steps as Step[];
                         const merged = edited.map((s, i) => ({
                           ...s,
@@ -274,8 +296,14 @@ export default function SentCampaignDetailPage() {
             )}
             {!playbookExpanded ? (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-400">
-                {playbookSteps.length === 0 ? (
-                  "No playbook steps yet."
+                {playbookGuidelines ? (
+                  <>
+                    <p>Tone: {playbookGuidelines.tone}</p>
+                    <p className="mt-1">Steps: {playbookGuidelines.numSteps} ({playbookGuidelines.stepDelays.join(", ")} days)</p>
+                    {playbookGuidelines.structure && <p className="mt-1 line-clamp-2">{playbookGuidelines.structure}</p>}
+                  </>
+                ) : playbookSteps.length === 0 ? (
+                  "No playbook yet."
                 ) : (
                   <div className="space-y-1">
                     {playbookSteps.map((s, i) => {
@@ -295,10 +323,47 @@ export default function SentCampaignDetailPage() {
                 <p className="text-sm text-zinc-500 mb-4">
                   {sent.campaignId ? "This campaign is linked to a playbook. Edit below and save to update it for future use." : "Edit the default playbook (used for new campaigns)."}
                 </p>
-                {playbookSteps.length === 0 && (
-                  <p className="text-sm text-zinc-500 mb-4">No playbook steps yet. Add below and save.</p>
-                )}
+                {playbookGuidelines ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-zinc-400 mb-1">Tone</label>
+                      <input
+                        value={playbookGuidelines.tone}
+                        onChange={(e) => setPlaybookGuidelines((g) => g ? { ...g, tone: e.target.value } : null)}
+                        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-zinc-400 mb-1">Structure</label>
+                      <textarea
+                        value={playbookGuidelines.structure}
+                        onChange={(e) => setPlaybookGuidelines((g) => g ? { ...g, structure: e.target.value } : null)}
+                        rows={4}
+                        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <label className="block text-sm text-zinc-400">Delays:</label>
+                      {playbookGuidelines.stepDelays.map((d, i) => (
+                        <input
+                          key={i}
+                          type="number"
+                          min={0}
+                          value={d}
+                          onChange={(e) => setPlaybookGuidelines((g) => {
+                            if (!g) return g;
+                            const arr = [...g.stepDelays];
+                            arr[i] = Math.max(0, Number(e.target.value) || 0);
+                            return { ...g, stepDelays: arr };
+                          })}
+                          className="w-14 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2 text-zinc-200 text-sm"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
                 <div className="space-y-4">
+                  {playbookSteps.length === 0 && <p className="text-sm text-zinc-500">No playbook steps yet. Add below and save.</p>}
                   {playbookSteps.map((s, i) => (
                     <div key={i} className="rounded-lg border border-zinc-800 p-4">
                       <span className="text-xs text-zinc-500">Step {s.stepNumber}</span>
@@ -318,6 +383,7 @@ export default function SentCampaignDetailPage() {
                     </div>
                   ))}
                 </div>
+                )}
                 <div className="mt-4 flex items-center gap-3">
                   <button
                     onClick={savePlaybook}

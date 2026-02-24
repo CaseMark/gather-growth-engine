@@ -90,20 +90,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Proof points saved", proofPoints: toStore });
     }
 
-    // Save edited playbook (no AI)
-    if (body.playbook && typeof body.playbook === "object" && Array.isArray(body.playbook.steps)) {
-      const steps = body.playbook.steps as Array<{ stepNumber: number; subject: string; body: string; delayDays: number }>;
-      const valid = steps.every(
-        (s) => typeof s.stepNumber === "number" && typeof s.subject === "string" && typeof s.body === "string" && typeof s.delayDays === "number"
-      );
-      if (!valid) {
-        return NextResponse.json({ error: "Invalid playbook steps format." }, { status: 400 });
+    // Save playbook: guidelines (new) or steps (legacy)
+    if (body.playbook && typeof body.playbook === "object") {
+      const pb = body.playbook as { guidelines?: { tone?: string; structure?: string; numSteps?: number; stepDelays?: number[] }; steps?: Array<{ stepNumber: number; subject: string; body: string; delayDays: number }> };
+
+      if (pb.guidelines) {
+        const g = pb.guidelines;
+        const numSteps = Math.min(10, Math.max(1, g.numSteps ?? 3));
+        const stepDelays = Array.isArray(g.stepDelays) && g.stepDelays.length >= numSteps
+          ? g.stepDelays.slice(0, numSteps)
+          : [0, 3, 5, 7, 10].slice(0, numSteps);
+        const toStore = {
+          guidelines: {
+            tone: typeof g.tone === "string" ? g.tone : "direct, consultative",
+            structure: typeof g.structure === "string" ? g.structure : "",
+            numSteps,
+            stepDelays,
+          },
+        };
+        await prisma.workspace.update({
+          where: { userId: session.user.id },
+          data: { playbookJson: JSON.stringify(toStore), playbookApproved: false },
+        });
+        return NextResponse.json({ message: "Playbook updated", playbook: toStore });
       }
-      await prisma.workspace.update({
-        where: { userId: session.user.id },
-        data: { playbookJson: JSON.stringify({ steps }), playbookApproved: false },
-      });
-      return NextResponse.json({ message: "Playbook updated", playbook: { steps } });
+
+      if (Array.isArray(pb.steps)) {
+        const steps = pb.steps as Array<{ stepNumber: number; subject: string; body: string; delayDays: number }>;
+        const valid = steps.every(
+          (s) => typeof s.stepNumber === "number" && typeof s.subject === "string" && typeof s.body === "string" && typeof s.delayDays === "number"
+        );
+        if (!valid) {
+          return NextResponse.json({ error: "Invalid playbook steps format." }, { status: 400 });
+        }
+        await prisma.workspace.update({
+          where: { userId: session.user.id },
+          data: { playbookJson: JSON.stringify({ steps }), playbookApproved: false },
+        });
+        return NextResponse.json({ message: "Playbook updated", playbook: { steps } });
+      }
     }
 
     // Generate playbook from ICP
@@ -154,16 +179,10 @@ export async function POST(request: Request) {
       5: [0, 3, 5, 7, 10],
     };
     const delays = delayDaysExamples[numSteps];
-    const stepsJson = delays
-      .map(
-        (d, i) =>
-          `    { "stepNumber": ${i + 1}, "subject": "...", "body": "...", "delayDays": ${d} }`
-      )
-      .join(",\n");
 
     const proofBlock =
       proofPointsForPrompt.length > 0
-        ? `\nProof points (use where relevant in the sequence):\n${proofPointsForPrompt.map((p) => (p.title ? `- ${p.title}: ${p.text}` : `- ${p.text}`)).join("\n")}\n`
+        ? `\nProof points (use where relevant):\n${proofPointsForPrompt.map((p) => (p.title ? `- ${p.title}: ${p.text}` : `- ${p.text}`)).join("\n")}\n`
         : "";
 
     let strategyBlock = "";
@@ -178,7 +197,7 @@ export async function POST(request: Request) {
       strategyBlock = "";
     }
 
-    const prompt = `You are an expert outbound sales copywriter. Create an email playbook (sequence) for cold outreach.
+    const prompt = `You are an expert outbound sales copywriter. Create a PLAYBOOK (guidelines) for cold outreach — NOT pre-written email templates. The playbook will be used to generate hyper-personalized emails for EACH lead based on who they are.
 
 Product summary:
 ${workspace.productSummary}
@@ -187,23 +206,25 @@ Ideal Customer Profile (ICP):
 ${icp}
 ${proofBlock}${strategyBlock}
 
-Respond with ONLY a valid JSON object, no other text. Use this exact structure with exactly ${numSteps} steps:
+Respond with ONLY a valid JSON object:
 {
-  "steps": [
-${stepsJson}
-  ]
+  "guidelines": {
+    "tone": "e.g. direct, consultative, friendly",
+    "structure": "Describe each step's purpose. Example: 'Step 1: Hook with sharp question about their pain. Step 2: Elaborate on value and proof. Step 3: Soft CTA. Step 4: Break pattern / add urgency. Step 5: Last touch.'",
+    "numSteps": ${numSteps},
+    "stepDelays": [${delays.join(", ")}]
+  }
 }
 
-Rules: stepNumber 1 to ${numSteps}. delayDays for each step: ${delays.join(", ")}. Keep subjects short and intriguing. Keep bodies concise (2-4 short paragraphs), conversational, and personalized to the ICP. Use placeholders like {{firstName}}, {{company}}, {{senderName}} where appropriate.`;
+Rules: tone = how to sound. structure = what each step should accomplish (NOT the actual email text). numSteps = ${numSteps}. stepDelays = days between emails: ${delays.join(", ")}.`;
 
-    const { text: rawText } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2000 });
+    const { text: rawText } = await callAnthropic(anthropicKey, prompt, { maxTokens: 1000 });
 
-    // Parse JSON from response (handle markdown code blocks)
     let jsonStr = rawText.trim();
     const codeBlock = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (codeBlock) jsonStr = codeBlock[1].trim();
 
-    let playbookObj: { steps: Array<{ stepNumber: number; subject: string; body: string; delayDays: number }> };
+    let playbookObj: { guidelines?: { tone?: string; structure?: string; numSteps?: number; stepDelays?: number[] } };
     try {
       playbookObj = JSON.parse(jsonStr);
     } catch {
@@ -213,12 +234,23 @@ Rules: stepNumber 1 to ${numSteps}. delayDays for each step: ${delays.join(", ")
       );
     }
 
-    if (!playbookObj?.steps || !Array.isArray(playbookObj.steps)) {
+    if (!playbookObj?.guidelines) {
       return NextResponse.json(
         { error: "Invalid playbook format from agent." },
         { status: 500 }
       );
     }
+
+    const g = playbookObj.guidelines;
+    const stepDelays = Array.isArray(g.stepDelays) && g.stepDelays.length >= numSteps ? g.stepDelays.slice(0, numSteps) : delays;
+    const toStore = {
+      guidelines: {
+        tone: g.tone ?? "direct, consultative",
+        structure: g.structure ?? "",
+        numSteps,
+        stepDelays,
+      },
+    };
 
     await prisma.workspace.update({
       where: { userId: session.user.id },
@@ -227,14 +259,14 @@ Rules: stepNumber 1 to ${numSteps}. delayDays for each step: ${delays.join(", ")
         ...(Array.isArray(bodyProofPoints) && bodyProofPoints.length > 0
           ? { proofPointsJson: JSON.stringify(proofPointsForPrompt) }
           : {}),
-        playbookJson: JSON.stringify(playbookObj),
+        playbookJson: JSON.stringify(toStore),
         playbookApproved: false,
       },
     });
 
     return NextResponse.json({
       message: "Playbook generated",
-      playbook: playbookObj,
+      playbook: toStore,
     });
   } catch (error: any) {
     console.error("Playbook POST error:", error);

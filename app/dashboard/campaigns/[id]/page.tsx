@@ -33,7 +33,12 @@ export default function CampaignPage() {
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>("playbook");
-  const [editingSteps, setEditingSteps] = useState<Array<{ stepNumber: number; subject: string; body: string; delayDays: number }>>([]);
+  const [editingGuidelines, setEditingGuidelines] = useState<{
+    tone: string;
+    structure: string;
+    numSteps: number;
+    stepDelays: number[];
+  }>({ tone: "direct, consultative", structure: "", numSteps: 3, stepDelays: [0, 3, 5] });
   const [savingPlaybook, setSavingPlaybook] = useState(false);
   const [playbookError, setPlaybookError] = useState("");
   const [batches, setBatches] = useState<Array<{ id: string; name: string | null; leadCount: number }>>([]);
@@ -65,6 +70,12 @@ export default function CampaignPage() {
   const [playbookAiInput, setPlaybookAiInput] = useState("");
   const [playbookAiOpen, setPlaybookAiOpen] = useState(false);
   const [playbookAiLoading, setPlaybookAiLoading] = useState(false);
+  const [samples, setSamples] = useState<Array<{
+    persona: string;
+    exampleLead?: { name: string; company: string; jobTitle: string; industry?: string };
+    steps: Array<{ subject: string; body: string }>;
+  }>>([]);
+  const [samplesLoading, setSamplesLoading] = useState(false);
 
   useEffect(() => {
     if (!id || !session?.user?.id) return;
@@ -76,22 +87,31 @@ export default function CampaignPage() {
           setCampaignNameInput(data.campaign.name || "");
           if (data.campaign.playbookJson) {
             try {
-              const pb = JSON.parse(data.campaign.playbookJson) as { steps?: Array<{ stepNumber?: number; subject: string; body: string; delayDays: number }> };
-              if (pb?.steps?.length) {
-                setEditingSteps(pb.steps.map((s, i) => ({
-                  stepNumber: (s.stepNumber ?? i + 1),
-                  subject: s.subject ?? "",
-                  body: s.body ?? "",
-                  delayDays: typeof s.delayDays === "number" ? s.delayDays : i === 0 ? 0 : 3,
-                })));
-              } else {
-                setEditingSteps([{ stepNumber: 1, subject: "", body: "", delayDays: 0 }, { stepNumber: 2, subject: "", body: "", delayDays: 3 }, { stepNumber: 3, subject: "", body: "", delayDays: 5 }]);
+              const pb = JSON.parse(data.campaign.playbookJson) as {
+                guidelines?: { tone?: string; structure?: string; numSteps?: number; stepDelays?: number[] };
+                steps?: Array<{ stepNumber?: number; subject: string; body: string; delayDays: number }>;
+              };
+              if (pb?.guidelines) {
+                const g = pb.guidelines;
+                setEditingGuidelines({
+                  tone: g.tone ?? "direct, consultative",
+                  structure: g.structure ?? "",
+                  numSteps: Math.min(10, Math.max(1, g.numSteps ?? 3)),
+                  stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
+                });
+              } else if (pb?.steps?.length) {
+                const steps = pb.steps;
+                const delays = steps.map((s) => (typeof s.delayDays === "number" ? s.delayDays : 0));
+                setEditingGuidelines({
+                  tone: "direct, consultative",
+                  structure: steps.map((s, i) => `Step ${i + 1}: ${(s.subject || "").slice(0, 50)}`).join(" → "),
+                  numSteps: steps.length,
+                  stepDelays: delays,
+                });
               }
             } catch {
-              setEditingSteps([{ stepNumber: 1, subject: "", body: "", delayDays: 0 }, { stepNumber: 2, subject: "", body: "", delayDays: 3 }, { stepNumber: 3, subject: "", body: "", delayDays: 5 }]);
+              //
             }
-          } else {
-            setEditingSteps([{ stepNumber: 1, subject: "", body: "", delayDays: 0 }, { stepNumber: 2, subject: "", body: "", delayDays: 3 }, { stepNumber: 3, subject: "", body: "", delayDays: 5 }]);
           }
           if (data.campaign.leadBatchId) {
             setSelectedBatchId(data.campaign.leadBatchId);
@@ -156,7 +176,14 @@ export default function CampaignPage() {
     setSavingPlaybook(true);
     setPlaybookError("");
     try {
-      const playbookJson = JSON.stringify({ steps: editingSteps });
+      const playbookJson = JSON.stringify({
+        guidelines: {
+          tone: editingGuidelines.tone,
+          structure: editingGuidelines.structure,
+          numSteps: editingGuidelines.numSteps,
+          stepDelays: editingGuidelines.stepDelays,
+        },
+      });
       const res = await fetch(`/api/campaigns/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -382,7 +409,7 @@ export default function CampaignPage() {
               </div>
 
               {step === "playbook" && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
@@ -390,7 +417,7 @@ export default function CampaignPage() {
                       className="flex items-center gap-2 text-left group"
                     >
                       <h2 className="text-lg font-medium text-zinc-200 group-hover:text-zinc-100">
-                        Playbook (email sequence)
+                        Playbook (guidelines)
                       </h2>
                       <span className="text-zinc-500 text-sm">
                         {playbookExpanded ? "▼" : "▶"}
@@ -399,19 +426,21 @@ export default function CampaignPage() {
                     <button
                       type="button"
                       onClick={() => setPlaybookAiOpen((v) => !v)}
-                      disabled={editingSteps.length === 0}
-                      className="rounded-md border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded-md border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-900/30"
                     >
                       Update with AI
                     </button>
                   </div>
+                  <p className="text-sm text-zinc-500">
+                    Define how to write — not templates. Each lead gets hyper-personalized emails written from these guidelines.
+                  </p>
                   {playbookAiOpen && (
                     <div className="flex flex-wrap items-end gap-2">
                       <input
                         type="text"
                         value={playbookAiInput}
                         onChange={(e) => setPlaybookAiInput(e.target.value)}
-                        placeholder="e.g. Make step 2 shorter, add more urgency to subject lines"
+                        placeholder="e.g. Make step 2 more urgent, use shorter subject lines"
                         className="flex-1 min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
                       />
                       <button
@@ -425,18 +454,19 @@ export default function CampaignPage() {
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
                                 message: playbookAiInput.trim(),
-                                context: { steps: editingSteps },
+                                context: { guidelines: editingGuidelines },
                               }),
                             });
                             const data = await res.json();
                             if (data.error) throw new Error(data.error);
-                            if (data.edits?.steps?.length) {
-                              const edited = data.edits.steps as Array<{ stepNumber: number; subject: string; body: string; delayDays?: number }>;
-                              const merged = edited.map((s, i) => ({
-                                ...s,
-                                delayDays: s.delayDays ?? editingSteps[i]?.delayDays ?? (i === 0 ? 0 : 3),
+                            if (data.edits?.guidelines) {
+                              const g = data.edits.guidelines;
+                              setEditingGuidelines((prev) => ({
+                                tone: g.tone ?? prev.tone,
+                                structure: g.structure ?? prev.structure,
+                                numSteps: g.numSteps ?? prev.numSteps,
+                                stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : prev.stepDelays,
                               }));
-                              setEditingSteps(merged);
                             }
                             setPlaybookAiInput("");
                           } catch {
@@ -454,53 +484,138 @@ export default function CampaignPage() {
                   )}
                   {!playbookExpanded ? (
                     <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-400">
-                      {editingSteps.length === 0 ? (
-                        "No playbook steps yet."
-                      ) : (
-                        <div className="space-y-1">
-                          {editingSteps.map((s, i) => {
-                            const body = s.body || "";
-                            const preview = body.slice(0, 50) + (body.length > 50 ? "…" : "");
-                            return (
-                              <p key={i} className="truncate">
-                                Step {i + 1}: {s.subject || "(no subject)"}{preview ? ` — ${preview}` : ""}
-                              </p>
-                            );
-                          })}
-                        </div>
+                      <p>Tone: {editingGuidelines.tone}</p>
+                      <p className="mt-1">Steps: {editingGuidelines.numSteps} ({editingGuidelines.stepDelays.join(", ")} days)</p>
+                      {editingGuidelines.structure && (
+                        <p className="mt-1 line-clamp-2">{editingGuidelines.structure}</p>
                       )}
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-zinc-500">Edit steps below. Then click Next to add leads and generate personalized sequences.</p>
                       {playbookError && <div className="rounded-md bg-red-900/20 border border-red-800 px-4 py-2 text-sm text-red-300">{playbookError}</div>}
-                      {editingSteps.map((s, i) => (
-                        <div key={i} className="rounded-lg border border-zinc-800 p-4 space-y-2">
-                          <span className="text-xs text-zinc-500">Step {s.stepNumber}</span>
-                          <input
-                            placeholder="Subject"
-                            value={s.subject}
-                            onChange={(e) => setEditingSteps((prev) => prev.map((x, j) => j === i ? { ...x, subject: e.target.value } : x))}
-                            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
-                          />
-                          <textarea
-                            placeholder="Body"
-                            value={s.body}
-                            onChange={(e) => setEditingSteps((prev) => prev.map((x, j) => j === i ? { ...x, body: e.target.value } : x))}
-                            rows={4}
-                            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
-                          />
+                      <div>
+                        <label className="block text-sm text-zinc-400 mb-1">Tone</label>
+                        <input
+                          value={editingGuidelines.tone}
+                          onChange={(e) => setEditingGuidelines((g) => ({ ...g, tone: e.target.value }))}
+                          placeholder="e.g. direct, consultative, friendly"
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-zinc-400 mb-1">Structure (what each step should accomplish)</label>
+                        <textarea
+                          value={editingGuidelines.structure}
+                          onChange={(e) => setEditingGuidelines((g) => ({ ...g, structure: e.target.value }))}
+                          placeholder="Step 1: Hook with sharp question. Step 2: Elaborate on value. Step 3: Soft CTA. Step 4: Break pattern. Step 5: Last touch."
+                          rows={4}
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div>
+                          <label className="block text-sm text-zinc-400 mb-1">Number of steps</label>
+                          <select
+                            value={editingGuidelines.numSteps}
+                            onChange={(e) => {
+                              const n = Number(e.target.value);
+                              const base = [0, 3, 5, 7, 10];
+                              setEditingGuidelines((g) => ({ ...g, numSteps: n, stepDelays: base.slice(0, n) }));
+                            }}
+                            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                          >
+                            {[3, 4, 5].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
                         </div>
-                      ))}
+                        <div>
+                          <label className="block text-sm text-zinc-400 mb-1">Delays (days between emails)</label>
+                          <div className="flex gap-2">
+                            {editingGuidelines.stepDelays.map((d, i) => (
+                              <input
+                                key={i}
+                                type="number"
+                                min={0}
+                                value={d}
+                                onChange={(e) => setEditingGuidelines((g) => {
+                                  const arr = [...g.stepDelays];
+                                  arr[i] = Math.max(0, Number(e.target.value) || 0);
+                                  return { ...g, stepDelays: arr };
+                                })}
+                                className="w-14 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2 text-zinc-200 text-sm"
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                       <button
                         onClick={savePlaybookAndNext}
-                        disabled={savingPlaybook}
+                        disabled={savingPlaybook || !editingGuidelines.structure.trim()}
                         className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                       >
                         {savingPlaybook ? "Saving…" : "Next: Add leads & generate sequences"}
                       </button>
                     </>
                   )}
+
+                  {/* Sample emails for different ICPs */}
+                  <div className="border-t border-zinc-800 pt-6">
+                    <h3 className="text-sm font-medium text-zinc-300 mb-2">Sample emails</h3>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      Generate example sequences for different ICP personas to see what the AI will produce.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setSamplesLoading(true);
+                        try {
+                          const res = await fetch("/api/playbook/samples", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ campaignId: id, guidelines: editingGuidelines }),
+                          });
+                          const data = await res.json();
+                          if (data.samples) setSamples(data.samples);
+                          else throw new Error(data.error || "Failed");
+                        } catch {
+                          setSamples([]);
+                        } finally {
+                          setSamplesLoading(false);
+                        }
+                      }}
+                      disabled={samplesLoading || !editingGuidelines.structure.trim()}
+                      className="rounded-md bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-600 disabled:opacity-50"
+                    >
+                      {samplesLoading ? "Generating…" : "Generate samples"}
+                    </button>
+                    {samples.length > 0 && (
+                      <div className="mt-4 space-y-4">
+                        {samples.map((sample, si) => (
+                          <div key={si} className="rounded-lg border border-zinc-800 p-4">
+                            <p className="text-sm font-medium text-zinc-300 mb-2">
+                              {sample.persona}
+                              {sample.exampleLead && (
+                                <span className="text-zinc-500 font-normal ml-2">
+                                  — {sample.exampleLead.name}, {sample.exampleLead.company}
+                                </span>
+                              )}
+                            </p>
+                            <div className="space-y-3">
+                              {sample.steps.map((step, i) => (
+                                <div key={i} className="rounded border border-zinc-700 p-3 text-sm">
+                                  <p className="text-zinc-500 font-medium">Step {i + 1}: {step.subject || "(no subject)"}</p>
+                                  <pre className="mt-2 text-zinc-300 whitespace-pre-wrap font-sans text-xs break-words">
+                                    {(step.body || "").slice(0, 300)}{(step.body?.length ?? 0) > 300 ? "…" : ""}
+                                  </pre>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

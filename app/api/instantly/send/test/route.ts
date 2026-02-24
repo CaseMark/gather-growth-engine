@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getInstantlyClientForUserId } from "@/lib/instantly";
 import { prisma } from "@/lib/prisma";
+import { parsePlaybook } from "@/lib/playbook";
 
-const MAX_STEPS = 10;
 const MIN_SUBJECT_LENGTH = 10;
 const MIN_BODY_LENGTH = 50;
 
@@ -82,26 +82,11 @@ export async function POST(request: Request) {
       (text ?? "").replace(/\r\n/g, "\n").replace(/\n/g, "<br>\n");
 
     const playbookSource = flowCampaign?.playbookJson ?? workspace.playbookJson;
-    let playbookSteps: Array<{ subject: string; body: string; delayDays: number }> = [
-      { subject: "", body: "", delayDays: 0 },
-      { subject: "", body: "", delayDays: 3 },
-      { subject: "", body: "", delayDays: 5 },
-    ];
-    try {
-      const playbook = playbookSource ? (JSON.parse(playbookSource) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
-      if (playbook?.steps?.length) {
-        playbookSteps = playbook.steps.slice(0, MAX_STEPS).map((s) => ({
-          subject: s.subject ?? "",
-          body: s.body ?? "",
-          delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
-        }));
-      }
-    } catch {
-      //
-    }
+    const parsed = parsePlaybook(playbookSource);
+    const numStepsFromPlaybook = parsed?.numSteps ?? 3;
 
     // Test campaign: 2 min between each step so all emails arrive within minutes
-    const sequenceSteps = playbookSteps.map((s, i) => ({
+    const sequenceSteps = Array.from({ length: numStepsFromPlaybook }, (_, i) => ({
       subject: `{{step${i + 1}_subject}}`,
       body: `{{step${i + 1}_body}}`,
       delayDays: i === 0 ? 0 : 2,
@@ -133,7 +118,7 @@ export async function POST(request: Request) {
       return steps;
     };
 
-    const numSteps = sequenceSteps.length;
+    const numSteps = numStepsFromPlaybook;
     const firstLead = batch.leads[0] as LeadWithSteps;
     const steps = getLeadSteps(firstLead, numSteps);
 

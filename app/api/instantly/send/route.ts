@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getInstantlyClientForUserId } from "@/lib/instantly";
 import { prisma } from "@/lib/prisma";
+import { parsePlaybook, getSequenceSteps } from "@/lib/playbook";
 
 /**
  * Create campaign(s), apply ramp, add leads, activate.
@@ -98,36 +99,15 @@ export async function POST(request: Request) {
         .replace(/\r\n/g, "\n")
         .replace(/\n/g, "<br>\n");
 
-    // Playbook steps: from Campaign if launching from flow, else workspace
     const playbookSource = flowCampaign?.playbookJson ?? workspace.playbookJson;
-    const MAX_STEPS = 10;
-    let playbookSteps: Array<{ subject: string; body: string; delayDays: number }> = [
-      { subject: "", body: "", delayDays: 0 },
-      { subject: "", body: "", delayDays: 3 },
-      { subject: "", body: "", delayDays: 5 },
-    ];
-    try {
-      const playbook = playbookSource ? (JSON.parse(playbookSource) as { steps?: Array<{ subject: string; body: string; delayDays: number }> }) : null;
-      if (playbook?.steps?.length) {
-        playbookSteps = playbook.steps.slice(0, MAX_STEPS).map((s) => ({
-          subject: s.subject ?? "",
-          body: s.body ?? "",
-          delayDays: typeof s.delayDays === "number" ? s.delayDays : 0,
-        }));
-      }
-    } catch {
-      // use default 3 steps
-    }
-    // Ensure at least 2–3 days between steps (best practice). Step 0 = immediate; steps 1+ = min 2–3 days gap.
-    const minGapDays = () => 2 + Math.floor(Math.random() * 2); // 2 or 3 randomly
-    const sequenceSteps = playbookSteps.map((s, i) => {
-      const delay = i === 0 ? 0 : Math.max(s.delayDays, minGapDays());
-      return {
-        subject: `{{step${i + 1}_subject}}`,
-        body: `{{step${i + 1}_body}}`,
-        delayDays: delay,
-      };
-    });
+    const parsed = parsePlaybook(playbookSource);
+    const numStepsFromPlaybook = parsed?.numSteps ?? 3;
+    const stepDelays = parsed?.stepDelays ?? [0, 3, 5];
+    const minGapDays = () => 2 + Math.floor(Math.random() * 2);
+    const sequenceSteps = getSequenceSteps(numStepsFromPlaybook, stepDelays).map((s, i) => ({
+      ...s,
+      delayDays: i === 0 ? 0 : Math.max(s.delayDays, minGapDays()),
+    }));
 
     // Get a lead's steps array (from stepsJson or legacy step1/2/3), padded to numSteps
     type LeadWithSteps = typeof batch.leads[0] & { stepsJson?: string | null };
