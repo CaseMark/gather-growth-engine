@@ -43,6 +43,7 @@ export default function SentCampaignDetailPage() {
   const [testEmail, setTestEmail] = useState("");
   const [testSending, setTestSending] = useState(false);
   const [testMessage, setTestMessage] = useState("");
+  const [showSequencePreview, setShowSequencePreview] = useState(false);
 
   useEffect(() => {
     if (!sentId || !session?.user?.id) return;
@@ -153,6 +154,9 @@ export default function SentCampaignDetailPage() {
     return [];
   };
 
+  const templateLead = sent.leadBatch?.leads?.find((l) => getLeadStepsForDisplay(l).length > 0);
+  const previewSteps = templateLead ? getLeadStepsForDisplay(templateLead) : [];
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-zinc-800/80 bg-zinc-950/95 flex-shrink-0">
@@ -192,6 +196,47 @@ export default function SentCampaignDetailPage() {
             </section>
           )}
 
+          {/* Playbook (editable) — above Emails sent, below AI suggestions */}
+          <section className="mb-10">
+            <h2 className="text-lg font-medium text-zinc-200 mb-4">Playbook</h2>
+            <p className="text-sm text-zinc-500 mb-4">
+              {sent.campaignId ? "This campaign is linked to a playbook. Edit below and save to update it for future use." : "Edit the default playbook (used for new campaigns)."}
+            </p>
+            {playbookSteps.length === 0 && (
+              <p className="text-sm text-zinc-500 mb-4">No playbook steps yet. Add below and save.</p>
+            )}
+            <div className="space-y-4">
+              {playbookSteps.map((s, i) => (
+                <div key={i} className="rounded-lg border border-zinc-800 p-4">
+                  <span className="text-xs text-zinc-500">Step {s.stepNumber}</span>
+                  <input
+                    placeholder="Subject"
+                    value={s.subject}
+                    onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, subject: e.target.value } : x))}
+                    className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                  />
+                  <textarea
+                    placeholder="Body"
+                    value={s.body}
+                    onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, body: e.target.value } : x))}
+                    rows={3}
+                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={savePlaybook}
+                disabled={savingPlaybook}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {savingPlaybook ? "Saving…" : "Save playbook"}
+              </button>
+              {playbookSaved && <span className="text-sm text-emerald-400">Saved.</span>}
+            </div>
+          </section>
+
           {/* Stats */}
           <section className="mb-10">
             <h2 className="text-lg font-medium text-zinc-200 mb-4">Stats</h2>
@@ -219,7 +264,7 @@ export default function SentCampaignDetailPage() {
           <section className="mb-10">
             <h2 className="text-lg font-medium text-zinc-200 mb-4">Send test to my email</h2>
             <p className="text-sm text-zinc-500 mb-3">
-              Creates a separate test campaign with 2-min delays. You’ll receive each step as a separate email within minutes (step 1 immediately, then one every ~2 min).
+              Creates a separate test campaign with 2-min delays. Emails send when Instantly's schedule allows (Mon–Fri, 9am–5pm). Check your Instantly dashboard and inbox (including spam).
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[200px]">
@@ -257,11 +302,34 @@ export default function SentCampaignDetailPage() {
               >
                 {testSending ? "Sending…" : "Send test to my email"}
               </button>
+              {previewSteps.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowSequencePreview((v) => !v)}
+                  className="rounded-md border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                >
+                  {showSequencePreview ? "Hide sequence preview" : "Preview sequence"}
+                </button>
+              )}
             </div>
             {testMessage && (
-              <p className={`mt-3 text-sm ${testMessage.includes("Check your inbox") || testMessage.includes("added") ? "text-emerald-400" : "text-amber-400"}`}>
+              <p className={`mt-3 text-sm ${testMessage.includes("Check your inbox") || testMessage.includes("added") || testMessage.includes("activated") ? "text-emerald-400" : "text-amber-400"}`}>
                 {testMessage}
               </p>
+            )}
+            {showSequencePreview && previewSteps.length > 0 && (
+              <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900/50 p-4 space-y-4">
+                <p className="text-sm text-zinc-400">What will be sent (personalized per lead). Sample from {templateLead?.email ?? "first lead"}:</p>
+                {previewSteps.map((step, i) => (
+                  <div key={i} className="rounded border border-zinc-700 p-3">
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Step {i + 1}</p>
+                    <p className="text-zinc-400 font-medium">Subject: {step.subject || "(none)"}</p>
+                    <pre className="mt-2 text-zinc-300 whitespace-pre-wrap font-sans text-sm break-words">
+                      {step.body || "(no body)"}
+                    </pre>
+                  </div>
+                ))}
+              </div>
             )}
           </section>
 
@@ -361,47 +429,6 @@ export default function SentCampaignDetailPage() {
               </div>
             </section>
           )}
-
-          {/* Playbook (editable) */}
-          <section className="mb-10">
-            <h2 className="text-lg font-medium text-zinc-200 mb-4">Playbook</h2>
-            <p className="text-sm text-zinc-500 mb-4">
-              {sent.campaignId ? "This campaign is linked to a playbook. Edit below and save to update it for future use." : "Edit the default playbook (used for new campaigns)."}
-            </p>
-            {playbookSteps.length === 0 && (
-              <p className="text-sm text-zinc-500 mb-4">No playbook steps yet. Add below and save.</p>
-            )}
-            <div className="space-y-4">
-              {playbookSteps.map((s, i) => (
-                <div key={i} className="rounded-lg border border-zinc-800 p-4">
-                  <span className="text-xs text-zinc-500">Step {s.stepNumber}</span>
-                  <input
-                    placeholder="Subject"
-                    value={s.subject}
-                    onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, subject: e.target.value } : x))}
-                    className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
-                  />
-                  <textarea
-                    placeholder="Body"
-                    value={s.body}
-                    onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, body: e.target.value } : x))}
-                    rows={3}
-                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <button
-                onClick={savePlaybook}
-                disabled={savingPlaybook}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-              >
-                {savingPlaybook ? "Saving…" : "Save playbook"}
-              </button>
-              {playbookSaved && <span className="text-sm text-emerald-400">Saved.</span>}
-            </div>
-          </section>
         </div>
       </main>
     </div>

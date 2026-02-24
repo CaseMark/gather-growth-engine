@@ -192,7 +192,7 @@ export async function POST(request: Request) {
       campaignName,
       testEmail: testEmailTrimmed,
       numSteps,
-      message: `Test campaign created. You will receive ${numSteps} emails at ${testEmailTrimmed} within minutes (step 1 immediately, then one every ~2 min). Check your inbox.`,
+      message: `Test campaign created and activated. Emails will send when Instantly's schedule allows (Mon–Fri, 9am–5pm). Check your Instantly dashboard for the [TEST] campaign, and your inbox (including spam).`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Test send failed";

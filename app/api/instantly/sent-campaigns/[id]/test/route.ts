@@ -157,7 +157,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       testEmail,
-      message: `Test campaign created. You will receive ${steps.length} emails at ${testEmail} within minutes (step 1 immediately, then one every ~2 min). Check your inbox.`,
+      message: `Test campaign created and activated. Emails will send when Instantly's schedule allows (Mon–Fri, 9am–5pm in campaign timezone). Check your Instantly dashboard for the [TEST] campaign, and your inbox (including spam).`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to add test lead";

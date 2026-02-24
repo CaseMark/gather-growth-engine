@@ -509,7 +509,7 @@ export default function CampaignPage() {
                   {/* Test campaign — send multi-step to one email */}
                   <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-4">
                     <h3 className="text-sm font-medium text-amber-200 mb-2">Test campaign first</h3>
-                    <p className="text-xs text-zinc-500 mb-3">Creates a test campaign with 2-min delays. You’ll get each step as a separate email within minutes so you can confirm before launching for real.</p>
+                    <p className="text-xs text-zinc-500 mb-3">Creates a test campaign with 2-min delays. Emails send when Instantly's schedule allows (Mon–Fri, 9am–5pm). Check your Instantly dashboard and inbox (including spam).</p>
                     <div className="flex flex-wrap items-end gap-3">
                       <div className="flex-1 min-w-[200px]">
                         <label className="block text-xs text-zinc-500 mb-1">Test email</label>
