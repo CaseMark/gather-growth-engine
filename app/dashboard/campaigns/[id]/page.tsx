@@ -45,6 +45,7 @@ export default function CampaignPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
+  const [generateProgress, setGenerateProgress] = useState<{ total: number; generated: number } | null>(null);
   const [csvInput, setCsvInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -151,6 +152,21 @@ export default function CampaignPage() {
   }, [session?.user?.id]);
 
   useEffect(() => {
+    if (step !== "sequences") {
+      setGenerateProgress(null);
+      return;
+    }
+    if (selectedBatchId && !generating) {
+      fetch(`/api/leads/generate/status?batchId=${encodeURIComponent(selectedBatchId)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.total != null && data.generated != null) setGenerateProgress({ total: data.total, generated: data.generated });
+        })
+        .catch(() => {});
+    }
+  }, [step, selectedBatchId, generating]);
+
+  useEffect(() => {
     if (step !== "send" || !campaign?.leadBatchId || !id) {
       setValidation(null);
       return;
@@ -208,12 +224,29 @@ export default function CampaignPage() {
     }
   };
 
-  const linkBatchAndGenerate = async () => {
+  const fetchGenerateProgress = async () => {
+    if (!selectedBatchId) return;
+    try {
+      const res = await fetch(`/api/leads/generate/status?batchId=${encodeURIComponent(selectedBatchId)}`);
+      const data = await res.json();
+      if (res.ok && data.total != null && data.generated != null) {
+        setGenerateProgress({ total: data.total, generated: data.generated });
+        return data;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  };
+
+  const generateAll = async () => {
     if (!id || !selectedBatchId) {
       setGenerateError("Select or upload a lead list first.");
       return;
     }
     setGenerateError("");
+    setGenerating(true);
+    setGenerateProgress(null);
     try {
       await fetch(`/api/campaigns/${id}`, {
         method: "PATCH",
@@ -223,18 +256,24 @@ export default function CampaignPage() {
     } catch {
       // ignore
     }
-    setGenerating(true);
     try {
-      const res = await fetch("/api/leads/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 2 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Generate failed");
-      if (data.done !== undefined && data.total > 0 && data.done < data.total) {
-        setGenerateError(`Generated ${data.done} of ${data.total}. Click "Generate sequences" again to continue.`);
-      } else {
+      let status = await fetchGenerateProgress();
+      if (!status) {
+        setGenerateError("Could not fetch progress.");
+        return;
+      }
+      while (status.generated < status.total) {
+        const res = await fetch("/api/leads/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Generate failed");
+        status = await fetchGenerateProgress();
+        if (!status) break;
+      }
+      if (status && status.generated >= status.total) {
         setStep("send");
         setCampaign((c) => c ? { ...c, status: "sequences_ready", leadBatchId: selectedBatchId } : null);
       }
@@ -242,6 +281,7 @@ export default function CampaignPage() {
       setGenerateError(e instanceof Error ? e.message : "Generate failed");
     } finally {
       setGenerating(false);
+      // Keep progress visible so user can resume
     }
   };
 
@@ -733,13 +773,27 @@ export default function CampaignPage() {
                       ))}
                     </select>
                   </div>
+                  {generateProgress && generateProgress.total > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-zinc-400">
+                        <span>{generating ? "Generating sequences…" : "Progress"}</span>
+                        <span>{generateProgress.generated} of {generateProgress.total}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-600 transition-all duration-300"
+                          style={{ width: `${(100 * generateProgress.generated) / generateProgress.total}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                   {generateError && <p className="text-sm text-amber-400">{generateError}</p>}
                   <button
-                    onClick={linkBatchAndGenerate}
+                    onClick={generateAll}
                     disabled={!selectedBatchId || generating}
                     className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
-                    {generating ? "Generating…" : "Generate sequences & Next"}
+                    {generating ? "Generating…" : "Generate all sequences & Next"}
                   </button>
                 </div>
               )}

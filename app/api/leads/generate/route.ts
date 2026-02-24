@@ -24,8 +24,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
     const offset = Math.max(0, Number(offsetParam) || 0);
-    // Tiny chunks: each lead = 1 Anthropic call (~3–5s). 2 leads ≈ 6–10s to stay under Vercel timeout.
-    const CHUNK_SIZE = 2;
+    // Each lead = 1 Anthropic call (~3–5s). 10 leads ≈ 30–50s to stay under 60s Vercel timeout.
+    const CHUNK_SIZE = 10;
     const limit = Math.min(CHUNK_SIZE, Math.max(1, Number(limitParam) || CHUNK_SIZE));
 
     const workspace = await prisma.workspace.findUnique({
