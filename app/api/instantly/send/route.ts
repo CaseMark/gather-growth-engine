@@ -296,7 +296,7 @@ export async function POST(request: Request) {
         ],
       });
       if (flowCampaign?.id) {
-        await prisma.campaign.update({ where: { id: flowCampaign.id }, data: { status: "launched" } });
+        await prisma.campaign.update({ where: { id: flowCampaign.id }, data: { status: "launched", name: baseName } });
       }
 
       const totalUploaded = resA.leads_uploaded + resB.leads_uploaded;
@@ -362,7 +362,7 @@ export async function POST(request: Request) {
       },
     });
     if (flowCampaign?.id) {
-      await prisma.campaign.update({ where: { id: flowCampaign.id }, data: { status: "launched" } });
+      await prisma.campaign.update({ where: { id: flowCampaign.id }, data: { status: "launched", name: campaignName } });
     }
 
     return NextResponse.json({
