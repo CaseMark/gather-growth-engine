@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput, accountEmails, campaignId: flowCampaignId } = body as {
+    const { batchId, abTest, subjectLineA, subjectLineB, campaignName: campaignNameInput, accountEmails, campaignId: flowCampaignId, skipFailingLeads } = body as {
       batchId?: string;
       abTest?: boolean;
       subjectLineA?: string;
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       campaignName?: string;
       accountEmails?: string[];
       campaignId?: string;
+      skipFailingLeads?: boolean;
     };
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -179,12 +180,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Every lead must have a full sequence that passes. No partial send.
-    if (leadsPassingAllSteps.length < batch.leads.length) {
+    // Every lead must pass unless skipFailingLeads is true
+    if (leadsPassingAllSteps.length < batch.leads.length && !skipFailingLeads) {
       const missing = batch.leads.length - leadsPassingAllSteps.length;
       return NextResponse.json(
         {
-          error: `Every lead must have a personalized ${numSteps}-step sequence that passes the quality check (subject ≥10 chars, body ≥50 chars per step). ${missing} of ${batch.leads.length} leads are missing content or fail. Run "Generate sequences" until the quality check shows 100% pass, then try again.`,
+          error: `Every lead must have a personalized ${numSteps}-step sequence that passes the quality check (subject ≥10 chars, body ≥50 chars per step). ${missing} of ${batch.leads.length} leads are missing content or fail. Run "Generate sequences" until the quality check shows 100% pass, or use "Skip failing leads & Launch".`,
           validation: {
             numSteps,
             totalLeads: batch.leads.length,

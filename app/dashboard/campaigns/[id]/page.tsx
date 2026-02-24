@@ -371,13 +371,13 @@ export default function CampaignPage() {
     }
   };
 
-  const handleLaunch = async () => {
+  const handleLaunch = async (opts?: { skipFailingLeads?: boolean }) => {
     if (!id || !campaign?.leadBatchId || !campaignNameInput.trim()) {
       setSendError("Campaign name and lead list are required.");
       return;
     }
-    if (validation && !validation.canSend) {
-      setSendError("Every lead must have a full sequence that passes. Run 'Generate sequences' until 100% pass.");
+    if (!opts?.skipFailingLeads && validation && !validation.canSend) {
+      setSendError("Every lead must have a full sequence that passes. Run 'Generate sequences' until 100% pass, or use 'Skip failing leads & Launch'.");
       return;
     }
     setSending(true);
@@ -391,6 +391,7 @@ export default function CampaignPage() {
           campaignName: campaignNameInput.trim(),
           campaignId: id,
           accountEmails: selectedAccountEmails && selectedAccountEmails.length > 0 ? selectedAccountEmails : undefined,
+          skipFailingLeads: opts?.skipFailingLeads ?? false,
         }),
       });
       const data = await res.json();
@@ -908,13 +909,24 @@ export default function CampaignPage() {
                     )}
                   </div>
                   {sendError && <div className="rounded-md bg-red-900/20 border border-red-800 px-4 py-2 text-sm text-red-300">{sendError}</div>}
-                  <button
-                    onClick={handleLaunch}
-                    disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && !validation.canSend)}
-                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {sending ? "Launching…" : "Launch campaign"}
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => handleLaunch()}
+                      disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && !validation.canSend)}
+                      className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      {sending ? "Launching…" : "Launch campaign"}
+                    </button>
+                    {validation && !validation.canSend && (validation.leadsPassingAllSteps ?? 0) > 0 && (
+                      <button
+                        onClick={() => handleLaunch({ skipFailingLeads: true })}
+                        disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId}
+                        className="rounded-md border border-amber-600 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
+                      >
+                        {sending ? "Launching…" : `Skip ${(validation.totalLeads ?? 0) - (validation.leadsPassingAllSteps ?? 0)} failing leads & Launch`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </>
