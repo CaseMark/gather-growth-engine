@@ -20,9 +20,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { campaignId, guidelines: bodyGuidelines } = body as {
+    const { campaignId, guidelines: bodyGuidelines, customLead } = body as {
       campaignId?: string;
       guidelines?: { tone?: string; structure?: string; numSteps?: number; stepDelays?: number[] };
+      customLead?: { jobTitle?: string; companyUrl?: string };
     };
 
     const workspace = await prisma.workspace.findUnique({
@@ -89,7 +90,38 @@ export async function POST(request: Request) {
         ? `\nRough structure (adapt freely): ${legacySteps.map((s, i) => `Step ${i + 1}: ${(s.subject || "").slice(0, 60)}`).join(" | ")}`
         : "";
 
-    const prompt = `You are an expert outbound sales copywriter. Generate SAMPLE email sequences for 3 different ICP personas. These are examples of what hyper-personalized sequences would look like for different types of leads.
+    const hasCustomLead = customLead && (customLead.jobTitle?.trim() || customLead.companyUrl?.trim());
+
+    const prompt = hasCustomLead
+      ? `You are an expert outbound sales copywriter. Generate ONE SAMPLE email sequence for a specific lead the user wants to preview.
+
+Product summary:
+${productSummary}
+
+Overall ICP:
+${icp}
+${proofPointsText}
+${structureBlock}
+
+THE USER WANTS TO SEE A SAMPLE FOR THIS LEAD:
+- Job title: ${customLead.jobTitle?.trim() ?? "(infer from ICP)"}
+- Company: ${customLead.companyUrl?.trim() ?? "(infer from ICP)"}
+
+Infer a plausible name and any other details from the company/URL (e.g. from "acme.com" use "Acme" or "Acme Inc"). Write a COMPLETE, ready-to-send ${numSteps}-email sequence — not templates or placeholders. Make it feel hand-crafted for this specific person and company.
+
+Respond with ONLY a valid JSON object:
+{
+  "samples": [
+    {
+      "persona": "${customLead.jobTitle?.trim() || "Custom lead"} at ${customLead.companyUrl?.trim() || "target company"}",
+      "exampleLead": { "name": "...", "company": "...", "jobTitle": "${customLead.jobTitle?.trim() ?? ""}", "industry": "..." },
+      "steps": [ { "subject": "...", "body": "..." }, ... ]
+    }
+  ]
+}
+
+The steps array must have exactly ${numSteps} items.`
+      : `You are an expert outbound sales copywriter. Generate SAMPLE email sequences for 3 different ICP personas. These are examples of what hyper-personalized sequences would look like for different types of leads.
 
 Product summary:
 ${productSummary}

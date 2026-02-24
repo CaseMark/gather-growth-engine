@@ -76,6 +76,8 @@ export default function CampaignPage() {
     steps: Array<{ subject: string; body: string }>;
   }>>([]);
   const [samplesLoading, setSamplesLoading] = useState(false);
+  const [sampleJobTitle, setSampleJobTitle] = useState("");
+  const [sampleCompanyUrl, setSampleCompanyUrl] = useState("");
 
   useEffect(() => {
     if (!id || !session?.user?.id) return;
@@ -565,6 +567,28 @@ export default function CampaignPage() {
                     <p className="text-xs text-zinc-500 mb-3">
                       Generate example sequences for different ICP personas to see what the AI will produce.
                     </p>
+                    <div className="flex flex-wrap items-end gap-3 mb-3">
+                      <div className="min-w-[140px]">
+                        <label className="block text-xs text-zinc-500 mb-1">Job title (optional)</label>
+                        <input
+                          type="text"
+                          value={sampleJobTitle}
+                          onChange={(e) => setSampleJobTitle(e.target.value)}
+                          placeholder="e.g. VP Sales"
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div className="min-w-[180px]">
+                        <label className="block text-xs text-zinc-500 mb-1">Company URL (optional)</label>
+                        <input
+                          type="text"
+                          value={sampleCompanyUrl}
+                          onChange={(e) => setSampleCompanyUrl(e.target.value)}
+                          placeholder="e.g. acme.com or Acme Inc"
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                        />
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={async () => {
@@ -573,7 +597,13 @@ export default function CampaignPage() {
                           const res = await fetch("/api/playbook/samples", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ campaignId: id, guidelines: editingGuidelines }),
+                            body: JSON.stringify({
+                              campaignId: id,
+                              guidelines: editingGuidelines,
+                              customLead: (sampleJobTitle.trim() || sampleCompanyUrl.trim())
+                                ? { jobTitle: sampleJobTitle.trim() || undefined, companyUrl: sampleCompanyUrl.trim() || undefined }
+                                : undefined,
+                            }),
                           });
                           const data = await res.json();
                           if (data.samples) setSamples(data.samples);
