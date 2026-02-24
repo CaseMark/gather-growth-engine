@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         { stepsJson: null },
         { stepsJson: "" },
         { stepsJson: "[]" },
-      ] as const,
+      ],
     };
 
     const [total, chunk] = await Promise.all([
