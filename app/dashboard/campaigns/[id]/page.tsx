@@ -48,6 +48,9 @@ export default function CampaignPage() {
   const [csvInput, setCsvInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetImporting, setSheetImporting] = useState(false);
+  const [sheetError, setSheetError] = useState("");
   const [campaignNameInput, setCampaignNameInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -264,6 +267,32 @@ export default function CampaignPage() {
       setUploadError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSheetImport = async () => {
+    const url = sheetUrl.trim();
+    if (!url) {
+      setSheetError("Paste a Google Sheets URL.");
+      return;
+    }
+    setSheetImporting(true);
+    setSheetError("");
+    try {
+      const res = await fetch("/api/leads/import/sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetUrl: url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+      setSelectedBatchId(data.batchId);
+      setBatches((prev) => [{ id: data.batchId, name: `Sheet import`, leadCount: data.count }, ...prev]);
+      setSheetUrl("");
+    } catch (e) {
+      setSheetError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setSheetImporting(false);
     }
   };
 
@@ -662,7 +691,7 @@ export default function CampaignPage() {
               {step === "sequences" && (
                 <div className="space-y-4">
                   <h2 className="text-lg font-medium text-zinc-200">Leads & sequences</h2>
-                  <p className="text-sm text-zinc-500">Upload a CSV (email, name, company, job title) or select an existing list. Then generate personalized email sequences for each lead.</p>
+                  <p className="text-sm text-zinc-500">Upload a CSV (email, name, company, job title), paste a Google Sheets URL, or select an existing list. Then generate personalized email sequences for each lead.</p>
                   <div>
                     <label className="block text-sm text-zinc-400 mb-1">Paste CSV</label>
                     <textarea
@@ -676,6 +705,20 @@ export default function CampaignPage() {
                       {uploading ? "Uploading…" : "Upload CSV"}
                     </button>
                     {uploadError && <p className="mt-1 text-sm text-red-400">{uploadError}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm text-zinc-400 mb-1">Or paste Google Sheets URL</label>
+                    <input
+                      type="url"
+                      value={sheetUrl}
+                      onChange={(e) => setSheetUrl(e.target.value)}
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                    />
+                    <button onClick={handleSheetImport} disabled={sheetImporting} className="mt-2 rounded-md bg-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-600 disabled:opacity-50">
+                      {sheetImporting ? "Importing…" : "Import from Sheet"}
+                    </button>
+                    {sheetError && <p className="mt-1 text-sm text-red-400">{sheetError}</p>}
                   </div>
                   <div>
                     <label className="block text-sm text-zinc-400 mb-1">Or select existing list</label>
