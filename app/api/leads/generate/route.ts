@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { batchId, offset: offsetParam, limit: limitParam, campaignId: campaignIdParam } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string };
+    const { batchId, offset: offsetParam, limit: limitParam, campaignId: campaignIdParam, useFastModel: useFastModelParam } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string; useFastModel?: boolean };
 
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -87,8 +87,8 @@ export async function POST(request: Request) {
         : "";
 
     const anthropicKey = decrypt(workspace.anthropicKey);
-    // Use Haiku for lead generation: 4-5x faster than Sonnet, still good for structured email output
-    const model = "claude-haiku-4-5";
+    const useFastModel = useFastModelParam !== false;
+    const model = useFastModel ? "claude-haiku-4-5" : (workspace.anthropicModel ?? "claude-haiku-4-5");
     const productSummary = workspace.productSummary ?? "";
     const icp = (campaignIcp ?? workspace.icp) ?? "";
 

@@ -46,6 +46,7 @@ export default function CampaignPage() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [generateProgress, setGenerateProgress] = useState<{ total: number; generated: number } | null>(null);
+  const [useFastModel, setUseFastModel] = useState(true);
   const [csvInput, setCsvInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -266,7 +267,7 @@ export default function CampaignPage() {
         const res = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10 }),
+          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10, useFastModel }),
         });
         const text = await res.text();
         let data: { error?: string } = {};
@@ -801,6 +802,15 @@ export default function CampaignPage() {
                   >
                     {generating ? "Generating…" : "Generate all sequences & Next"}
                   </button>
+                  <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useFastModel}
+                      onChange={(e) => setUseFastModel(e.target.checked)}
+                      className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Use fast model (Haiku — faster, good quality)
+                  </label>
                 </div>
               )}
 
