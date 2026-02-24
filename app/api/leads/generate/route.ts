@@ -24,8 +24,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
     }
     const offset = Math.max(0, Number(offsetParam) || 0);
-    // Each lead = 1 Anthropic call (~3–5s). 5 leads ≈ 15–25s to stay under Vercel timeout.
-    const CHUNK_SIZE = 5;
+    // Haiku + parallel: each lead ~1–2s. 10 parallel ≈ 10–15s total per chunk.
+    const CHUNK_SIZE = 10;
     const limit = Math.min(CHUNK_SIZE, Math.max(1, Number(limitParam) || CHUNK_SIZE));
 
     const workspace = await prisma.workspace.findUnique({
@@ -87,7 +87,8 @@ export async function POST(request: Request) {
         : "";
 
     const anthropicKey = decrypt(workspace.anthropicKey);
-    const model = workspace.anthropicModel ?? undefined;
+    // Use Haiku for lead generation: 4-5x faster than Sonnet, still good for structured email output
+    const model = "claude-haiku-4-5";
     const productSummary = workspace.productSummary ?? "";
     const icp = (campaignIcp ?? workspace.icp) ?? "";
 
@@ -111,10 +112,7 @@ export async function POST(request: Request) {
       memory = null;
     }
 
-    let usageTotal = { input_tokens: 0, output_tokens: 0 };
-    const leadIds: string[] = [];
-
-    for (const lead of chunk) {
+    const processLead = async (lead: (typeof chunk)[0]) => {
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
         const parts: string[] = [];
@@ -148,13 +146,10 @@ Write ${numSteps} emails. Use their real name, company, and context throughout. 
 Respond with ONLY a valid JSON object with keys ${stepKeys}. Each step: { "subject": "...", "body": "..." }
 Example: {${stepExample}}`;
 
+      let usage = { input_tokens: 0, output_tokens: 0 };
       try {
-        const { text: raw, usage } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400, model });
-        if (usage) {
-          usageTotal.input_tokens += usage.input_tokens;
-          usageTotal.output_tokens += usage.output_tokens;
-        }
-        leadIds.push(lead.id);
+        const { text: raw, usage: u } = await callAnthropic(anthropicKey, prompt, { maxTokens: 2400, model });
+        if (u) usage = u;
         let jsonStr = raw.trim();
         const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlock) jsonStr = codeBlock[1].trim();
@@ -188,6 +183,7 @@ Example: {${stepExample}}`;
           where: { id: lead.id },
           data: update,
         });
+        return { leadId: lead.id, usage };
       } catch (err) {
         console.error(`Lead ${lead.id} personalize error:`, err);
         const fallbackSteps = Array.from({ length: numSteps }, () => ({ subject: "", body: "" }));
@@ -204,8 +200,19 @@ Example: {${stepExample}}`;
           where: { id: lead.id },
           data: fallback,
         });
+        return { leadId: lead.id, usage };
       }
-    }
+    };
+
+    const results = await Promise.all(chunk.map(processLead));
+    const leadIds = results.map((r) => r.leadId);
+    const usageTotal = results.reduce(
+      (acc, r) => ({
+        input_tokens: acc.input_tokens + r.usage.input_tokens,
+        output_tokens: acc.output_tokens + r.usage.output_tokens,
+      }),
+      { input_tokens: 0, output_tokens: 0 }
+    );
 
     return NextResponse.json({
       done: chunk.length,
