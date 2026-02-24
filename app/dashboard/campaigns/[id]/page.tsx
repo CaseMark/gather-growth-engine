@@ -268,8 +268,14 @@ export default function CampaignPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10 }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Generate failed");
+        const text = await res.text();
+        let data: { error?: string } = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(text?.slice(0, 200) || `Generate failed (${res.status})`);
+        }
+        if (!res.ok) throw new Error(data.error || text?.slice(0, 200) || "Generate failed");
         status = await fetchGenerateProgress();
         if (!status) break;
       }
