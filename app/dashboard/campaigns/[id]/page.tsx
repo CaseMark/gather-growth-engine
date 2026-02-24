@@ -59,6 +59,7 @@ export default function CampaignPage() {
   const [instantlyAccounts, setInstantlyAccounts] = useState<Array<{ email: string }>>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [selectedAccountEmails, setSelectedAccountEmails] = useState<string[] | null>(null);
+  const [accountSearch, setAccountSearch] = useState("");
   const [validation, setValidation] = useState<{
     numSteps: number;
     totalLeads: number;
@@ -374,6 +375,11 @@ export default function CampaignPage() {
   const handleLaunch = async (opts?: { skipFailingLeads?: boolean }) => {
     if (!id || !campaign?.leadBatchId || !campaignNameInput.trim()) {
       setSendError("Campaign name and lead list are required.");
+      return;
+    }
+    const accountCount = selectedAccountEmails?.length ?? instantlyAccounts.length;
+    if (instantlyAccounts.length > 0 && accountCount === 0) {
+      setSendError("Select at least one mailbox to send from.");
       return;
     }
     if (!opts?.skipFailingLeads && validation && !validation.canSend) {
@@ -902,17 +908,70 @@ export default function CampaignPage() {
 
                   <div>
                     <label className="block text-sm text-zinc-400 mb-1">Instantly accounts</label>
-                    {accountsLoading ? <p className="text-zinc-500 text-sm">Loading…</p> : (
-                      <p className="text-sm text-zinc-500">
-                        {instantlyAccounts.length === 0 ? "Add your Instantly API key in Settings to see accounts." : `${instantlyAccounts.length} account(s) available. Sending will use all (or configure in Settings).`}
-                      </p>
+                    {accountsLoading ? (
+                      <p className="text-zinc-500 text-sm">Loading…</p>
+                    ) : instantlyAccounts.length === 0 ? (
+                      <p className="text-sm text-zinc-500">Add your Instantly API key in Settings to see accounts.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            value={accountSearch}
+                            onChange={(e) => setAccountSearch(e.target.value)}
+                            placeholder="Search mailboxes…"
+                            className="flex-1 min-w-[180px] rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAccountEmails(instantlyAccounts.map((a) => a.email))}
+                            className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAccountEmails([])}
+                            className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+                          >
+                            Unselect all
+                          </button>
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          {(selectedAccountEmails === null ? instantlyAccounts.length : selectedAccountEmails.length)} of {instantlyAccounts.length} selected
+                        </p>
+                        <div className="max-h-48 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
+                          {instantlyAccounts
+                            .filter((a) => !accountSearch.trim() || a.email.toLowerCase().includes(accountSearch.toLowerCase()))
+                            .map((a) => {
+                              const isSelected = (selectedAccountEmails ?? []).includes(a.email);
+                              return (
+                                <label key={a.email} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-zinc-800/50 cursor-pointer text-sm">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedAccountEmails((prev) => [...(prev ?? []), a.email]);
+                                      } else {
+                                        setSelectedAccountEmails((prev) => (prev ?? []).filter((em) => em !== a.email));
+                                      }
+                                    }}
+                                    className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span className="text-zinc-300 truncate">{a.email}</span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
                     )}
                   </div>
                   {sendError && <div className="rounded-md bg-red-900/20 border border-red-800 px-4 py-2 text-sm text-red-300">{sendError}</div>}
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => handleLaunch()}
-                      disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && !validation.canSend)}
+                      disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (validation != null && !validation.canSend) || (instantlyAccounts.length > 0 && (selectedAccountEmails?.length ?? 0) === 0)}
                       className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                     >
                       {sending ? "Launching…" : "Launch campaign"}
@@ -920,7 +979,7 @@ export default function CampaignPage() {
                     {validation && !validation.canSend && (validation.leadsPassingAllSteps ?? 0) > 0 && (
                       <button
                         onClick={() => handleLaunch({ skipFailingLeads: true })}
-                        disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId}
+                        disabled={sending || !campaignNameInput.trim() || !campaign.leadBatchId || (instantlyAccounts.length > 0 && (selectedAccountEmails?.length ?? 0) === 0)}
                         className="rounded-md border border-amber-600 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
                       >
                         {sending ? "Launching…" : `Skip ${(validation.totalLeads ?? 0) - (validation.leadsPassingAllSteps ?? 0)} failing leads & Launch`}
