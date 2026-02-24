@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
-import FeaturesSection from "@/components/FeaturesSection";
 
 const GITHUB_REPO = "https://github.com/mayankgbh/gather-growth-engine";
 
@@ -129,13 +128,6 @@ export default function HomePage() {
               <span>Fork on GitHub</span>
               <span aria-hidden="true">→</span>
             </a>
-          </div>
-        </section>
-
-        {/* Features */}
-        <section className="border-t border-zinc-800/80 bg-zinc-950">
-          <div className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
-            <FeaturesSection />
           </div>
         </section>
 
