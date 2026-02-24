@@ -76,6 +76,7 @@ export default function CampaignPage() {
     steps: Array<{ subject: string; body: string }>;
   }>>([]);
   const [samplesLoading, setSamplesLoading] = useState(false);
+  const [sampleError, setSampleError] = useState("");
   const [sampleJobTitle, setSampleJobTitle] = useState("");
   const [sampleCompanyUrl, setSampleCompanyUrl] = useState("");
 
@@ -593,6 +594,7 @@ export default function CampaignPage() {
                       type="button"
                       onClick={async () => {
                         setSamplesLoading(true);
+                        setSampleError("");
                         try {
                           const res = await fetch("/api/playbook/samples", {
                             method: "POST",
@@ -606,19 +608,27 @@ export default function CampaignPage() {
                             }),
                           });
                           const data = await res.json();
-                          if (data.samples) setSamples(data.samples);
-                          else throw new Error(data.error || "Failed");
-                        } catch {
+                          if (data.samples) {
+                            setSamples(data.samples);
+                            setSampleError("");
+                          } else {
+                            throw new Error(data.error || "Failed to generate");
+                          }
+                        } catch (e) {
                           setSamples([]);
+                          setSampleError(e instanceof Error ? e.message : "Failed to generate samples");
                         } finally {
                           setSamplesLoading(false);
                         }
                       }}
-                      disabled={samplesLoading || !editingGuidelines.structure.trim()}
+                      disabled={samplesLoading || (!editingGuidelines.structure.trim() && !sampleJobTitle.trim() && !sampleCompanyUrl.trim())}
                       className="rounded-md bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-600 disabled:opacity-50"
                     >
                       {samplesLoading ? "Generating…" : "Generate samples"}
                     </button>
+                    {sampleError && (
+                      <p className="mt-2 text-sm text-amber-400">{sampleError}</p>
+                    )}
                     {samples.length > 0 && (
                       <div className="mt-4 space-y-4">
                         {samples.map((sample, si) => (
