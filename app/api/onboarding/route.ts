@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     const domain = typeof body.domain === "string" ? body.domain.trim() : "";
     const anthropicKey = typeof body.anthropicKey === "string" ? body.anthropicKey.trim() : "";
     const instantlyKey = typeof body.instantlyKey === "string" ? body.instantlyKey.trim() : "";
+    const senderName = typeof body.senderName === "string" ? body.senderName.trim() || null : null;
 
     if (!domain) {
       return NextResponse.json(
@@ -42,12 +43,14 @@ export async function POST(request: Request) {
       where: { userId: session.user.id },
       update: {
         domain,
+        ...(senderName !== undefined && { senderName }),
         ...(anthropicKey && { anthropicKey: encryptedAnthropicKey }),
         ...(instantlyKey && { instantlyKey: encryptedInstantlyKey }),
       },
       create: {
         userId: session.user.id,
         domain,
+        senderName: senderName ?? null,
         anthropicKey: encryptedAnthropicKey,
         instantlyKey: encryptedInstantlyKey,
       },
@@ -81,6 +84,7 @@ export async function GET(request: Request) {
         domain: true,
         productSummary: true,
         anthropicModel: true,
+        senderName: true,
         createdAt: true,
         updatedAt: true,
         anthropicKey: true,

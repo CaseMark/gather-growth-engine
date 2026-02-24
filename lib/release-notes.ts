@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Configurable sender name",
+    description: "Set your sender name in Settings (e.g. 'John Smith, Gather') so emails sign off correctly. Fixes the bug where emails were signing as the recipient.",
+    author: "Mayank",
+    date: "2026-02-24",
+  },
+  {
     title: "Features section with feedback",
     description: "New Features section on home and dashboard: submit feature ideas (emailed to team) and see latest releases.",
     author: "Mayank",

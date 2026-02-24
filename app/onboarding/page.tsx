@@ -11,6 +11,7 @@ export default function OnboardingPage() {
   const { ready, loading: guardLoading, session } = useAuthGuard();
   const router = useRouter();
   const [domain, setDomain] = useState("");
+  const [senderName, setSenderName] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [instantlyKey, setInstantlyKey] = useState("");
   const [error, setError] = useState("");
@@ -25,6 +26,7 @@ export default function OnboardingPage() {
           if (data.workspace) {
             setExistingData(data.workspace);
             setDomain(data.workspace.domain || "");
+            setSenderName(data.workspace.senderName || "");
           }
         })
         .catch(console.error);
@@ -63,6 +65,7 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           domain,
+          senderName: senderName.trim() || null,
           anthropicKey,
           instantlyKey,
         }),
@@ -118,6 +121,24 @@ export default function OnboardingPage() {
               {error}
             </div>
           )}
+
+          <div>
+            <label htmlFor="sender_name" className="block text-sm font-medium text-zinc-300">
+              Sender name (for email sign-off)
+            </label>
+            <input
+              id="sender_name"
+              name="sender_name"
+              type="text"
+              placeholder="e.g. John Smith, Gather"
+              value={senderName}
+              onChange={(e) => setSenderName(e.target.value)}
+              className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              How to sign off cold emails. Never use the recipient&apos;s name here — only yours or your team&apos;s.
+            </p>
+          </div>
 
           <div>
             <label htmlFor="domain" className="block text-sm font-medium text-zinc-300">

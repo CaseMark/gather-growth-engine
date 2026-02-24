@@ -80,6 +80,7 @@ model Workspace {
   playbookJson    String?  // JSON: { steps: [{ subject, body, delayDays }] }
   playbookApproved Boolean @default(false)
   anthropicModel   String?  // e.g. claude-3-5-haiku, claude-3-5-sonnet (defaults to first in list if unset)
+  senderName       String?  // e.g. "John Smith, Gather" — used to sign off emails (never use recipient's name)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
