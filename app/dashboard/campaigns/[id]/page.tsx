@@ -645,8 +645,8 @@ export default function CampaignPage() {
                               {sample.steps.map((step, i) => (
                                 <div key={i} className="rounded border border-zinc-700 p-3 text-sm">
                                   <p className="text-zinc-500 font-medium">Step {i + 1}: {step.subject || "(no subject)"}</p>
-                                  <pre className="mt-2 text-zinc-300 whitespace-pre-wrap font-sans text-xs break-words">
-                                    {(step.body || "").slice(0, 300)}{(step.body?.length ?? 0) > 300 ? "…" : ""}
+                                  <pre className="mt-2 text-zinc-300 whitespace-pre-wrap font-sans text-sm break-words">
+                                    {step.body || "(no body)"}
                                   </pre>
                                 </div>
                               ))}
