@@ -266,7 +266,7 @@ export default function CampaignPage() {
         const res = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10 }),
+          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 5 }),
         });
         const text = await res.text();
         let data: { error?: string } = {};
