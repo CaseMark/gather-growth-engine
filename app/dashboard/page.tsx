@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
+import FeaturesSection from "@/components/FeaturesSection";
 
 type Campaign = {
   id: string;
@@ -188,6 +189,10 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-8">
+                <FeaturesSection />
+              </div>
 
               <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
                 <h2 className="px-6 py-4 text-lg font-medium text-zinc-200 border-b border-zinc-800">

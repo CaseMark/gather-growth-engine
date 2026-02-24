@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
+import FeaturesSection from "@/components/FeaturesSection";
 
 const GITHUB_REPO = "https://github.com/mayankgbh/gather-growth-engine";
 
@@ -131,15 +132,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* More coming soon */}
+        {/* Features */}
         <section className="border-t border-zinc-800/80 bg-zinc-950">
           <div className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
-            <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">
-              More features coming soon
-            </h2>
-            <p className="mt-3 text-zinc-400">
-              We’re actively building: smarter sequencing, more integrations, and better analytics. Stay tuned or open an issue on GitHub to shape the roadmap.
-            </p>
+            <FeaturesSection />
           </div>
         </section>
 

@@ -142,3 +142,39 @@ export async function sendPasswordResetEmail(
 
   return;
 }
+
+/** Send a feature request to mayank@gatherhq.com */
+export async function sendFeatureRequestEmail(
+  fromEmail: string,
+  fromName: string | null,
+  message: string
+): Promise<void> {
+  if (!RESEND_API_KEY?.trim()) {
+    throw new Error("Email is not configured. Set RESEND_API_KEY to submit feature requests.");
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${RESEND_API_KEY.trim()}`,
+    },
+    body: JSON.stringify({
+      from: RESEND_FROM_HEADER,
+      to: ["mayank@gatherhq.com"],
+      replyTo: [fromEmail],
+      subject: `[Feature Request] From ${fromName || fromEmail}`,
+      html: `
+        <h2>Feature request</h2>
+        <p><strong>From:</strong> ${fromName || "—"} &lt;${fromEmail}&gt;</p>
+        <hr />
+        <pre style="white-space: pre-wrap; font-family: inherit;">${message.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+      `,
+    }),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as { message?: string };
+  if (!res.ok) {
+    throw new Error(data?.message || "Failed to send feature request.");
+  }
+}
