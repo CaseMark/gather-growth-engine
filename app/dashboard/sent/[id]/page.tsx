@@ -44,6 +44,10 @@ export default function SentCampaignDetailPage() {
   const [testSending, setTestSending] = useState(false);
   const [testMessage, setTestMessage] = useState("");
   const [showSequencePreview, setShowSequencePreview] = useState(false);
+  const [playbookExpanded, setPlaybookExpanded] = useState(false);
+  const [playbookAiInput, setPlaybookAiInput] = useState("");
+  const [playbookAiOpen, setPlaybookAiOpen] = useState(false);
+  const [playbookAiLoading, setPlaybookAiLoading] = useState(false);
 
   useEffect(() => {
     if (!sentId || !session?.user?.id) return;
@@ -196,45 +200,136 @@ export default function SentCampaignDetailPage() {
             </section>
           )}
 
-          {/* Playbook (editable) — above Emails sent, below AI suggestions */}
+          {/* Playbook (editable, collapsible) — above Emails sent, below AI suggestions */}
           <section className="mb-10">
-            <h2 className="text-lg font-medium text-zinc-200 mb-4">Playbook</h2>
-            <p className="text-sm text-zinc-500 mb-4">
-              {sent.campaignId ? "This campaign is linked to a playbook. Edit below and save to update it for future use." : "Edit the default playbook (used for new campaigns)."}
-            </p>
-            {playbookSteps.length === 0 && (
-              <p className="text-sm text-zinc-500 mb-4">No playbook steps yet. Add below and save.</p>
-            )}
-            <div className="space-y-4">
-              {playbookSteps.map((s, i) => (
-                <div key={i} className="rounded-lg border border-zinc-800 p-4">
-                  <span className="text-xs text-zinc-500">Step {s.stepNumber}</span>
-                  <input
-                    placeholder="Subject"
-                    value={s.subject}
-                    onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, subject: e.target.value } : x))}
-                    className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
-                  />
-                  <textarea
-                    placeholder="Body"
-                    value={s.body}
-                    onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, body: e.target.value } : x))}
-                    rows={3}
-                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <button
-                onClick={savePlaybook}
-                disabled={savingPlaybook}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                type="button"
+                onClick={() => setPlaybookExpanded((v) => !v)}
+                className="flex items-center gap-2 text-left group"
               >
-                {savingPlaybook ? "Saving…" : "Save playbook"}
+                <h2 className="text-lg font-medium text-zinc-200 group-hover:text-zinc-100">
+                  Playbook
+                </h2>
+                <span className="text-zinc-500 text-sm">
+                  {playbookExpanded ? "▼" : "▶"}
+                </span>
               </button>
-              {playbookSaved && <span className="text-sm text-emerald-400">Saved.</span>}
+              <button
+                type="button"
+                onClick={() => setPlaybookAiOpen((v) => !v)}
+                disabled={playbookSteps.length === 0}
+                className="rounded-md border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Update with AI
+              </button>
             </div>
+            {playbookAiOpen && (
+              <div className="mb-4 flex flex-wrap items-end gap-2">
+                <input
+                  type="text"
+                  value={playbookAiInput}
+                  onChange={(e) => setPlaybookAiInput(e.target.value)}
+                  placeholder="e.g. Make step 2 shorter, add more urgency to subject lines"
+                  className="flex-1 min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!playbookAiInput.trim()) return;
+                    setPlaybookAiLoading(true);
+                    try {
+                      const res = await fetch("/api/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          message: playbookAiInput.trim(),
+                          context: { steps: playbookSteps },
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.error) throw new Error(data.error);
+                      if (data.edits?.steps?.length) {
+                        const edited = data.edits.steps as Step[];
+                        const merged = edited.map((s, i) => ({
+                          ...s,
+                          delayDays: s.delayDays ?? playbookSteps[i]?.delayDays ?? (i === 0 ? 0 : 3),
+                        }));
+                        setPlaybookSteps(merged);
+                        setPlaybookSaved(false);
+                      }
+                      setPlaybookAiInput("");
+                    } catch {
+                      setPlaybookAiInput("Failed. Try again.");
+                    } finally {
+                      setPlaybookAiLoading(false);
+                    }
+                  }}
+                  disabled={playbookAiLoading || !playbookAiInput.trim()}
+                  className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  {playbookAiLoading ? "Applying…" : "Apply"}
+                </button>
+              </div>
+            )}
+            {!playbookExpanded ? (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-400">
+                {playbookSteps.length === 0 ? (
+                  "No playbook steps yet."
+                ) : (
+                  <div className="space-y-1">
+                    {playbookSteps.map((s, i) => {
+                      const body = s.body || "";
+                      const preview = body.slice(0, 50) + (body.length > 50 ? "…" : "");
+                      return (
+                        <p key={i} className="truncate">
+                          Step {i + 1}: {s.subject || "(no subject)"}{preview ? ` — ${preview}` : ""}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-500 mb-4">
+                  {sent.campaignId ? "This campaign is linked to a playbook. Edit below and save to update it for future use." : "Edit the default playbook (used for new campaigns)."}
+                </p>
+                {playbookSteps.length === 0 && (
+                  <p className="text-sm text-zinc-500 mb-4">No playbook steps yet. Add below and save.</p>
+                )}
+                <div className="space-y-4">
+                  {playbookSteps.map((s, i) => (
+                    <div key={i} className="rounded-lg border border-zinc-800 p-4">
+                      <span className="text-xs text-zinc-500">Step {s.stepNumber}</span>
+                      <input
+                        placeholder="Subject"
+                        value={s.subject}
+                        onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, subject: e.target.value } : x))}
+                        className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                      />
+                      <textarea
+                        placeholder="Body"
+                        value={s.body}
+                        onChange={(e) => setPlaybookSteps((prev) => prev.map((x, j) => j === i ? { ...x, body: e.target.value } : x))}
+                        rows={3}
+                        className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={savePlaybook}
+                    disabled={savingPlaybook}
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {savingPlaybook ? "Saving…" : "Save playbook"}
+                  </button>
+                  {playbookSaved && <span className="text-sm text-emerald-400">Saved.</span>}
+                </div>
+              </>
+            )}
           </section>
 
           {/* Stats */}
