@@ -28,9 +28,11 @@ export async function POST(request: Request) {
       useFastModel: useFastModelParam,
       useWebScraping: useWebScrapingParam,
       useLandingPage: useLandingPageParam,
-    } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string; useFastModel?: boolean; useWebScraping?: boolean; useLandingPage?: boolean };
+      useVideo: useVideoParam,
+    } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string; useFastModel?: boolean; useWebScraping?: boolean; useLandingPage?: boolean; useVideo?: boolean };
     const useWebScraping = useWebScrapingParam === true;
     const useLandingPage = useLandingPageParam === true;
+    const useVideo = useVideoParam === true;
 
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
       prisma.lead.count({ where: needsWorkWhere }),
       prisma.lead.findMany({
         where: needsWorkWhere,
-        select: { id: true, email: true, name: true, jobTitle: true, company: true, website: true, industry: true, persona: true, vertical: true },
+        select: { id: true, email: true, name: true, jobTitle: true, company: true, website: true, industry: true, persona: true, vertical: true, videoUrl: true },
         orderBy: { id: "asc" },
         skip: offset,
         take: limit,
@@ -162,6 +164,11 @@ export async function POST(request: Request) {
         }
       }
 
+      let videoBlock = "";
+      if (useVideo && lead.videoUrl?.trim()) {
+        videoBlock = `\n\nInclude this personalized video link in at least one email: ${lead.videoUrl}. Write a compelling reason for them to watch (e.g. "I recorded a quick video for you" or "Here's a 5-second clip I made for [Company]").`;
+      }
+
       let landingPageBlock = "";
       let landingPageToken: string | null = null;
       if (useLandingPage && baseUrl) {
@@ -216,7 +223,7 @@ THIS LEAD:
 
 SUBJECT LINES: Write HIGHLY PERSONALIZED subject lines for each email. Use their name, company, or a contextual hook (e.g. "Quick question about [Company]'s growth", "Re: ${(lead.name ?? "").split(/\s+/)[0] || "you"} at ${lead.company ?? "your company"}"). Avoid generic subjects like "Quick question" or "Following up".
 
-Write ${numSteps} emails. JSON keys: ${stepKeys}. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.${socialProofText ? " Weave in social proof (similar companies, referral) where it fits naturally." : ""}${landingPageBlock}
+Write ${numSteps} emails. JSON keys: ${stepKeys}. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.${socialProofText ? " Weave in social proof (similar companies, referral) where it fits naturally." : ""}${videoBlock}${landingPageBlock}
 
 CRITICAL: Sign off as the SENDER, never as the recipient. Use their name only in the greeting (e.g. "Hey Bo,"). For the signature, use: ${workspace.senderName?.trim() ? workspace.senderName.trim() : "Best, [Your name] or The team at [Company]"}. Never use the recipient's name in the sign-off.
 

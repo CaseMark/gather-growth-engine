@@ -176,6 +176,9 @@ model Lead {
   website            String?   // company URL for web scraping
   industry           String?
   landingPageToken   String?   // token for personalized landing page
+  videoUrl           String?   // URL of generated personalized video
+  videoTaskId        String?   // Luma/Runway task ID for polling
+  videoTaskProvider  String?   // "luma" | "runway"
   emailVerified      Boolean?  // true/false after verify step; null = not checked
   persona            String?   // from classify (e.g. "VP Sales")
   vertical           String?   // from classify (e.g. "SaaS")

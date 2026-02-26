@@ -49,6 +49,15 @@ export default function CampaignPage() {
   const [useFastModel, setUseFastModel] = useState(true);
   const [useWebScraping, setUseWebScraping] = useState(false);
   const [useLandingPage, setUseLandingPage] = useState(false);
+  const [useVideo, setUseVideo] = useState(false);
+  const [hasLumaKey, setHasLumaKey] = useState(false);
+  const [hasRunwayKey, setHasRunwayKey] = useState(false);
+  const [generatingVideos, setGeneratingVideos] = useState(false);
+  const [videoProvider, setVideoProvider] = useState<"luma" | "runway">("luma");
+  useEffect(() => {
+    if (hasLumaKey && !hasRunwayKey) setVideoProvider("luma");
+    if (hasRunwayKey && !hasLumaKey) setVideoProvider("runway");
+  }, [hasLumaKey, hasRunwayKey]);
   const [csvInput, setCsvInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -134,6 +143,19 @@ export default function CampaignPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id, session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch("/api/onboarding")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.workspace) {
+          setHasLumaKey(Boolean(data.workspace.hasLumaKey));
+          setHasRunwayKey(Boolean(data.workspace.hasRunwayKey));
+        }
+      })
+      .catch(() => {});
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -280,7 +302,7 @@ export default function CampaignPage() {
         const res = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10, useFastModel, useWebScraping, useLandingPage }),
+          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10, useFastModel, useWebScraping, useLandingPage, useVideo }),
         });
         const text = await res.text();
         let data: { error?: string } = {};
@@ -918,10 +940,78 @@ export default function CampaignPage() {
                         />
                         Personalized landing page — unique link per lead (AI includes it in emails)
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-zinc-500 cursor-not-allowed" title="Add Luma or Runway API key in Settings to use when we launch">
-                        <input type="checkbox" disabled className="rounded border-zinc-600 bg-zinc-800" />
-                        AI video (Luma / Runway — add key in Settings, coming soon)
-                      </label>
+                      {(hasLumaKey || hasRunwayKey) && (
+                        <>
+                          <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={useVideo}
+                              onChange={(e) => setUseVideo(e.target.checked)}
+                              className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            AI video — include personalized video link (generate videos first, then sequences)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={videoProvider}
+                              onChange={(e) => setVideoProvider(e.target.value as "luma" | "runway")}
+                              className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-200 text-sm"
+                            >
+                              {hasLumaKey && <option value="luma">Luma</option>}
+                              {hasRunwayKey && <option value="runway">Runway</option>}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!selectedBatchId || generatingVideos) return;
+                                const prov = hasLumaKey && videoProvider === "luma" ? "luma" : hasRunwayKey ? "runway" : null;
+                                if (!prov) return;
+                                setGeneratingVideos(true);
+                                setGenerateError("");
+                                try {
+                                  const batchRes = await fetch(`/api/leads/batch/${selectedBatchId}`);
+                                  const batchData = await batchRes.json();
+                                  if (!batchRes.ok) throw new Error(batchData.error || "Failed to fetch leads");
+                                  const leads = (batchData.leads ?? []).filter((l: { videoUrl?: string }) => !l.videoUrl).slice(0, 3);
+                                  if (leads.length === 0) {
+                                    setGenerateError("All leads already have videos, or no leads in batch.");
+                                    return;
+                                  }
+                                  for (const lead of leads) {
+                                    const startRes = await fetch("/api/leads/video", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ leadId: lead.id, provider: prov }),
+                                    });
+                                    if (!startRes.ok) {
+                                      const d = await startRes.json();
+                                      throw new Error(d.error || "Failed to start video");
+                                    }
+                                    for (let i = 0; i < 60; i++) {
+                                      await new Promise((r) => setTimeout(r, 5000));
+                                      const statusRes = await fetch(`/api/leads/video?leadId=${encodeURIComponent(lead.id)}`);
+                                      const statusData = await statusRes.json();
+                                      if (statusData.status === "completed") break;
+                                      if (statusData.status === "failed") throw new Error("Video generation failed");
+                                    }
+                                  }
+                                } catch (e) {
+                                  setGenerateError(e instanceof Error ? e.message : "Video generation failed");
+                                } finally {
+                                  setGeneratingVideos(false);
+                                }
+                              }}
+                              disabled={generatingVideos || !selectedBatchId}
+                              className="rounded-md border border-zinc-600 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                            >
+                              {generatingVideos ? "Generating…" : "Generate videos (first 3)"}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      <p className="text-xs text-zinc-500">
+                        Sora — invitation-only. Luma & Runway — add API key in Settings.
+                      </p>
                     </div>
                   </div>
                   <button
