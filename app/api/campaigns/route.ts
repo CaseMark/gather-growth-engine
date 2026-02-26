@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getInstantlyClientForUserId } from "@/lib/instantly";
 
 /** GET: List campaigns for the current workspace, with basic stats for launched ones. */
 export async function GET() {
@@ -19,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ campaigns: [], aggregate: null }, { status: 200 });
     }
 
-    const [campaigns, legacySentCampaigns, allSentForWorkspace, replyCountResult, totalLeadsResult] = await Promise.all([
+    const [campaigns, legacySentCampaigns, allSentForWorkspace, replyCountFromDb, totalLeadsResult] = await Promise.all([
       prisma.campaign.findMany({
         where: { workspaceId: workspace.id },
         orderBy: { createdAt: "desc" },
@@ -46,7 +47,7 @@ export async function GET() {
       }),
       prisma.sentCampaign.findMany({
         where: { workspaceId: workspace.id },
-        select: { id: true },
+        select: { id: true, instantlyCampaignId: true },
       }),
       prisma.campaignReply.count({
         where: { sentCampaign: { workspaceId: workspace.id } },
@@ -55,6 +56,22 @@ export async function GET() {
         where: { leadBatch: { workspaceId: workspace.id } },
       }),
     ]);
+
+    // Fetch reply_count from Instantly for each sent campaign (source of truth for inbox replies)
+    let totalReplies = replyCountFromDb;
+    const ctx = await getInstantlyClientForUserId(session.user.id);
+    if (ctx && allSentForWorkspace.length > 0) {
+      const analyticsResults = await Promise.allSettled(
+        allSentForWorkspace
+          .filter((s) => s.instantlyCampaignId)
+          .map((s) => ctx.client.getCampaignAnalytics(s.instantlyCampaignId!))
+      );
+      const instantlyReplySum = analyticsResults.reduce((sum, r) => {
+        if (r.status === "fulfilled" && r.value?.reply_count != null) return sum + r.value.reply_count;
+        return sum;
+      }, 0);
+      totalReplies = Math.max(replyCountFromDb, instantlyReplySum);
+    }
 
     return NextResponse.json({
       campaigns,
@@ -71,7 +88,7 @@ export async function GET() {
         launchedCampaigns: campaigns.filter((c) => c.status === "launched").length + legacySentCampaigns.length,
         totalSentCampaigns: allSentForWorkspace.length,
         totalLeads: totalLeadsResult,
-        totalReplies: replyCountResult,
+        totalReplies,
       },
     });
   } catch (error) {
