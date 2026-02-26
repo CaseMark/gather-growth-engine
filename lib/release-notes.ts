@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Next.js upgrade compatibility",
+    description: "Build config updated for Next.js 16 (Turbopack) so future upgrades build correctly.",
+    author: "AI",
+    date: "2026-02-22",
+  },
+  {
     title: "Clear next steps when generation fails",
     description: "When generating fails, you now see what to do next (e.g. try again) and errors are emailed to the team so we can fix issues faster.",
     author: "AI",
