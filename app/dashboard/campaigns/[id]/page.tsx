@@ -38,8 +38,7 @@ export default function CampaignPage() {
     structure: string;
     numSteps: number;
     stepDelays: number[];
-    includeLinkedInStep?: boolean;
-  }>({ tone: "direct, consultative", structure: "", numSteps: 3, stepDelays: [0, 3, 5], includeLinkedInStep: false });
+  }>({ tone: "direct, consultative", structure: "", numSteps: 3, stepDelays: [0, 3, 5] });
   const [savingPlaybook, setSavingPlaybook] = useState(false);
   const [playbookError, setPlaybookError] = useState("");
   const [batches, setBatches] = useState<Array<{ id: string; name: string | null; leadCount: number }>>([]);
@@ -102,13 +101,12 @@ export default function CampaignPage() {
                 steps?: Array<{ stepNumber?: number; subject: string; body: string; delayDays: number }>;
               };
               if (pb?.guidelines) {
-                const g = pb.guidelines as { tone?: string; structure?: string; numSteps?: number; stepDelays?: number[]; includeLinkedInStep?: boolean };
+                const g = pb.guidelines as { tone?: string; structure?: string; numSteps?: number; stepDelays?: number[] };
                 setEditingGuidelines({
                   tone: g.tone ?? "direct, consultative",
                   structure: g.structure ?? "",
                   numSteps: Math.min(10, Math.max(1, g.numSteps ?? 3)),
                   stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
-                  includeLinkedInStep: Boolean(g.includeLinkedInStep),
                 });
               } else if (pb?.steps?.length) {
                 const steps = pb.steps;
@@ -208,7 +206,6 @@ export default function CampaignPage() {
           structure: editingGuidelines.structure,
           numSteps: editingGuidelines.numSteps,
           stepDelays: editingGuidelines.stepDelays,
-          includeLinkedInStep: editingGuidelines.includeLinkedInStep ?? false,
         },
       });
       const res = await fetch(`/api/campaigns/${id}`, {
@@ -637,19 +634,7 @@ export default function CampaignPage() {
                             ))}
                           </div>
                         </div>
-                        <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editingGuidelines.includeLinkedInStep ?? false}
-                            onChange={(e) => setEditingGuidelines((g) => ({ ...g, includeLinkedInStep: e.target.checked }))}
-                            className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
-                          />
-                          Include LinkedIn step (between email 1 & 2)
-                        </label>
                       </div>
-                      <p className="text-xs text-zinc-500 -mt-2">
-                        {editingGuidelines.includeLinkedInStep ? "AI will generate a personalized LinkedIn connection request per lead. Copy to Sales Nav, Dripify, or send manually." : ""}
-                      </p>
                       <button
                         onClick={savePlaybookAndNext}
                         disabled={savingPlaybook || !editingGuidelines.structure.trim()}

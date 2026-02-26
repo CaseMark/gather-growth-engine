@@ -44,7 +44,6 @@ export async function GET(
                 step1Subject: true,
                 step1Body: true,
                 stepsJson: true,
-                linkedinMessage: true,
               },
               orderBy: { createdAt: "asc" },
               take: 50,

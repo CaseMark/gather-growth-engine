@@ -153,7 +153,7 @@ export default function SentCampaignDetailPage() {
 
   const suggestion = analytics?.suggestion ?? memory?.suggestion;
 
-  type LeadRow = { id: string; email: string; name: string | null; company: string | null; step1Subject: string | null; step1Body: string | null; stepsJson: string | null; linkedinMessage?: string | null };
+  type LeadRow = { id: string; email: string; name: string | null; company: string | null; step1Subject: string | null; step1Body: string | null; stepsJson: string | null };
   const getLeadStepsForDisplay = (lead: LeadRow): Array<{ subject: string; body: string }> => {
     if (lead.stepsJson) {
       try {
@@ -535,31 +535,13 @@ export default function SentCampaignDetailPage() {
                         <div className="border-t border-zinc-800 p-4 bg-zinc-900/50 space-y-6">
                           {steps.map((step, i) => (
                             <div key={i}>
-                              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Email step {i + 1}</p>
+                              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Step {i + 1}</p>
                               <p className="text-zinc-500 font-medium">Subject: {step.subject || "(none)"}</p>
                               <pre className="mt-2 text-zinc-300 whitespace-pre-wrap font-sans text-sm break-words">
                                 {step.body || "(no body)"}
                               </pre>
                             </div>
                           ))}
-                          {(lead as LeadRow).linkedinMessage && (
-                            <div className="rounded border border-sky-800/50 bg-sky-950/30 p-3">
-                              <p className="text-xs text-sky-400 uppercase tracking-wider mb-1">LinkedIn connection request</p>
-                              <p className="text-zinc-400 text-sm mb-2">Copy to Sales Nav, Dripify, or send manually:</p>
-                              <pre className="text-zinc-300 whitespace-pre-wrap font-sans text-sm break-words">
-                                {(lead as LeadRow).linkedinMessage}
-                              </pre>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText((lead as LeadRow).linkedinMessage ?? "");
-                                }}
-                                className="mt-2 rounded border border-sky-600 px-2 py-1 text-xs text-sky-300 hover:bg-sky-900/40"
-                              >
-                                Copy
-                              </button>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
