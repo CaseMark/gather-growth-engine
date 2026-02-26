@@ -16,6 +16,8 @@ export default function OnboardingPage() {
   const [referralPhrase, setReferralPhrase] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [instantlyKey, setInstantlyKey] = useState("");
+  const [lumaApiKey, setLumaApiKey] = useState("");
+  const [runwayApiKey, setRunwayApiKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [existingData, setExistingData] = useState<any>(null);
@@ -81,6 +83,8 @@ export default function OnboardingPage() {
           referralPhrase: referralPhrase.trim() || null,
           anthropicKey,
           instantlyKey,
+          lumaApiKey,
+          runwayApiKey,
         }),
       });
 
@@ -257,6 +261,57 @@ export default function OnboardingPage() {
                 placeholder="Paste your Instantly API key"
                 value={instantlyKey}
                 onChange={(e) => setInstantlyKey(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+            <p className="text-xs text-zinc-500 mt-4">
+              Optional: Add a video API key to enable AI-generated personalized videos in campaigns (coming soon).
+            </p>
+            <div>
+              <label htmlFor="luma_key" className="block text-sm text-zinc-400">
+                Luma Dream Machine API key
+              </label>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                <a
+                  href="https://lumalabs.ai/dream-machine/api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-500 hover:text-emerald-400"
+                >
+                  Get your key at lumalabs.ai →
+                </a>
+              </p>
+              <input
+                id="luma_key"
+                name="luma_key"
+                type="password"
+                placeholder={existingData?.hasLumaKey ? "•••••••• (leave blank to keep)" : "Optional"}
+                value={lumaApiKey}
+                onChange={(e) => setLumaApiKey(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="runway_key" className="block text-sm text-zinc-400">
+                Runway API key
+              </label>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                <a
+                  href="https://docs.runwayml.com/docs/api-get-started"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-500 hover:text-emerald-400"
+                >
+                  Get your key at runwayml.com →
+                </a>
+              </p>
+              <input
+                id="runway_key"
+                name="runway_key"
+                type="password"
+                placeholder={existingData?.hasRunwayKey ? "•••••••• (leave blank to keep)" : "Optional"}
+                value={runwayApiKey}
+                onChange={(e) => setRunwayApiKey(e.target.value)}
                 className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>

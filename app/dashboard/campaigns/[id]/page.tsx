@@ -918,9 +918,9 @@ export default function CampaignPage() {
                         />
                         Personalized landing page — unique link per lead (AI includes it in emails)
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-zinc-500 cursor-not-allowed">
+                      <label className="flex items-center gap-2 text-sm text-zinc-500 cursor-not-allowed" title="Add Luma or Runway API key in Settings to use when we launch">
                         <input type="checkbox" disabled className="rounded border-zinc-600 bg-zinc-800" />
-                        AI video (Luma / Runway — coming soon)
+                        AI video (Luma / Runway — add key in Settings, coming soon)
                       </label>
                     </div>
                   </div>
