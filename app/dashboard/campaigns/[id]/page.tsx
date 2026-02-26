@@ -85,6 +85,8 @@ export default function CampaignPage() {
   const [sampleError, setSampleError] = useState("");
   const [sampleJobTitle, setSampleJobTitle] = useState("");
   const [sampleCompanyUrl, setSampleCompanyUrl] = useState("");
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  const [defaultPlaybookLoading, setDefaultPlaybookLoading] = useState(false);
 
   useEffect(() => {
     if (!id || !session?.user?.id) return;
@@ -130,6 +132,14 @@ export default function CampaignPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id, session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch("/api/playbook/default")
+      .then((r) => r.json())
+      .then((data) => setTemplates(data.templates ?? []))
+      .catch(() => {});
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -520,6 +530,88 @@ export default function CampaignPage() {
                   <p className="text-sm text-zinc-500">
                     Define how to write — not templates. Each lead gets hyper-personalized emails written from these guidelines.
                   </p>
+                  {(!editingGuidelines.structure.trim() || templates.length > 0) && (
+                    <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-4">
+                      <h3 className="text-sm font-medium text-emerald-200 mb-2">Quick start</h3>
+                      <p className="text-xs text-zinc-500 mb-3">
+                        No playbook yet? Generate one from your product + ICP, or pick a template.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setDefaultPlaybookLoading(true);
+                            setPlaybookError("");
+                            try {
+                              const res = await fetch("/api/playbook/default", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ campaignId: id }),
+                              });
+                              const data = await res.json();
+                              if (data.error) throw new Error(data.error);
+                              if (data.playbook?.guidelines) {
+                                const g = data.playbook.guidelines;
+                                setEditingGuidelines({
+                                  tone: g.tone ?? "direct, consultative",
+                                  structure: g.structure ?? "",
+                                  numSteps: g.numSteps ?? 3,
+                                  stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
+                                });
+                                setCampaign((c) => c ? { ...c, playbookJson: JSON.stringify(data.playbook) } : null);
+                              }
+                            } catch (e) {
+                              setPlaybookError(e instanceof Error ? e.message : "Failed to generate");
+                            } finally {
+                              setDefaultPlaybookLoading(false);
+                            }
+                          }}
+                          disabled={defaultPlaybookLoading}
+                          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                        >
+                          {defaultPlaybookLoading ? "Generating…" : "Generate default playbook"}
+                        </button>
+                        {templates.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={async () => {
+                              setDefaultPlaybookLoading(true);
+                              setPlaybookError("");
+                              try {
+                                const res = await fetch("/api/playbook/default", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ campaignId: id, templateId: t.id }),
+                                });
+                                const data = await res.json();
+                                if (data.error) throw new Error(data.error);
+                                if (data.playbook?.guidelines) {
+                                  const g = data.playbook.guidelines;
+                                  setEditingGuidelines({
+                                    tone: g.tone ?? "direct, consultative",
+                                    structure: g.structure ?? "",
+                                    numSteps: g.numSteps ?? 3,
+                                    stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
+                                  });
+                                  setCampaign((c) => c ? { ...c, playbookJson: JSON.stringify(data.playbook) } : null);
+                                }
+                              } catch (e) {
+                                setPlaybookError(e instanceof Error ? e.message : "Failed");
+                              } finally {
+                                setDefaultPlaybookLoading(false);
+                              }
+                            }}
+                            disabled={defaultPlaybookLoading}
+                            className="rounded-md border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                            title={t.description}
+                          >
+                            {t.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {playbookAiOpen && (
                     <div className="flex flex-wrap items-end gap-2">
                       <input
