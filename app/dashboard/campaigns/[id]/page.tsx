@@ -920,7 +920,7 @@ export default function CampaignPage() {
                       </label>
                       <label className="flex items-center gap-2 text-sm text-zinc-500 cursor-not-allowed">
                         <input type="checkbox" disabled className="rounded border-zinc-600 bg-zinc-800" />
-                        Video (coming soon)
+                        AI video (Luma / Runway — coming soon)
                       </label>
                     </div>
                   </div>
