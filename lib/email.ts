@@ -178,3 +178,43 @@ export async function sendFeatureRequestEmail(
     throw new Error(data?.message || "Failed to send feature request.");
   }
 }
+
+/** Send error notification to mayank@gatherhq.com (e.g. generation failures) */
+export async function sendErrorNotificationEmail(
+  context: string,
+  error: string,
+  extra?: Record<string, unknown>
+): Promise<void> {
+  if (!RESEND_API_KEY?.trim()) {
+    console.warn("[Email] RESEND_API_KEY not set, skipping error notification");
+    return;
+  }
+
+  const extraStr = extra ? `\n\nExtra:\n${JSON.stringify(extra, null, 2)}` : "";
+  const body = `${context}\n\nError: ${error}${extraStr}`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${RESEND_API_KEY.trim()}`,
+    },
+    body: JSON.stringify({
+      from: RESEND_FROM_HEADER,
+      to: ["mayank@gatherhq.com"],
+      subject: `[Outbound Growth Engine] ${context}`,
+      html: `
+        <h2>Error report</h2>
+        <p><strong>Context:</strong> ${context.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+        <p><strong>Error:</strong></p>
+        <pre style="white-space: pre-wrap; font-family: inherit; background: #1f2937; padding: 1rem; border-radius: 0.5rem;">${error.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+        ${extra ? `<p><strong>Extra:</strong></p><pre style="white-space: pre-wrap; font-family: inherit;">${JSON.stringify(extra).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>` : ""}
+      `,
+    }),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    console.error("[Email] Error notification failed:", data?.message || res.status);
+  }
+}

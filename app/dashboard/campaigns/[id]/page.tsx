@@ -292,12 +292,14 @@ export default function CampaignPage() {
     } catch {
       // ignore
     }
+    let lastProgress: { total: number; generated: number } | null = null;
     try {
       let status = await fetchGenerateProgress();
       if (!status) {
         setGenerateError("Could not fetch progress.");
         return;
       }
+      lastProgress = status;
       while (status.generated < status.total) {
         const res = await fetch("/api/leads/generate", {
           method: "POST",
@@ -313,6 +315,7 @@ export default function CampaignPage() {
         }
         if (!res.ok) throw new Error(data.error || text?.slice(0, 200) || "Generate failed");
         status = await fetchGenerateProgress();
+        if (status) lastProgress = status;
         if (!status) break;
       }
       if (status && status.generated >= status.total) {
@@ -320,7 +323,21 @@ export default function CampaignPage() {
         setCampaign((c) => c ? { ...c, status: "sequences_ready", leadBatchId: selectedBatchId } : null);
       }
     } catch (e) {
-      setGenerateError(e instanceof Error ? e.message : "Generate failed");
+      const errMsg = e instanceof Error ? e.message : "Generate failed";
+      setGenerateError(errMsg);
+      try {
+        await fetch("/api/feedback/error", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            context: "Sequence generation failed",
+            error: errMsg,
+            extra: { campaignId: id, batchId: selectedBatchId, progress: lastProgress },
+          }),
+        });
+      } catch {
+        // ignore
+      }
     } finally {
       setGenerating(false);
       // Keep progress visible so user can resume
@@ -917,7 +934,15 @@ export default function CampaignPage() {
                       </div>
                     </div>
                   )}
-                  {generateError && <p className="text-sm text-amber-400">{generateError}</p>}
+                  {generateError && (
+                    <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-4">
+                      <p className="text-sm font-medium text-amber-300">Generation failed</p>
+                      <p className="mt-1 text-sm text-amber-200/90">{generateError}</p>
+                      <p className="mt-3 text-sm text-zinc-400">
+                        <strong>What to do next:</strong> Click &quot;Generate all sequences & Next&quot; again to resume from where it stopped. Progress is saved. If it keeps failing, try a smaller batch or check Settings for API keys.
+                      </p>
+                    </div>
+                  )}
                   <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                     <h3 className="text-sm font-medium text-zinc-300 mb-2">Enhancement options</h3>
                     <p className="text-xs text-zinc-500 mb-3">Give the AI more context and tools for richer emails.</p>
@@ -996,7 +1021,21 @@ export default function CampaignPage() {
                                     }
                                   }
                                 } catch (e) {
-                                  setGenerateError(e instanceof Error ? e.message : "Video generation failed");
+                                  const errMsg = e instanceof Error ? e.message : "Video generation failed";
+                                  setGenerateError(errMsg);
+                                  try {
+                                    await fetch("/api/feedback/error", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        context: "Video generation failed",
+                                        error: errMsg,
+                                        extra: { batchId: selectedBatchId, provider: prov },
+                                      }),
+                                    });
+                                  } catch {
+                                    //
+                                  }
                                 } finally {
                                   setGeneratingVideos(false);
                                 }

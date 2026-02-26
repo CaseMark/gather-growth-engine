@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Clear next steps when generation fails",
+    description: "When generating fails, you now see what to do next (e.g. try again) and errors are emailed to the team so we can fix issues faster.",
+    author: "AI",
+    date: "2026-02-22",
+  },
+  {
     title: "Strategy feedback loop",
     description: "Dashboard now syncs analytics from Instantly automatically and shows strategy suggestions. When generating sequences, the AI applies learnings: shorter subject lines for low-open personas, maintain style for high-open segments. Run Classify on leads so we can tailor by persona/vertical.",
     author: "Mayank",
