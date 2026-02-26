@@ -6,7 +6,6 @@ import { decrypt } from "@/lib/encryption";
 import { callAnthropic } from "@/lib/anthropic";
 import { getAggregatedMemory } from "@/lib/performance-memory";
 import { parsePlaybook } from "@/lib/playbook";
-import { classifyLeads } from "@/lib/classify";
 
 // Allow up to 60s so a few Anthropic calls can finish (Vercel Pro; Hobby may still cap at 10s)
 export const maxDuration = 60;
@@ -62,27 +61,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Batch not found" }, { status: 404 });
     }
 
-    // Auto-classify: run classification for unclassified leads before generating. Enables strategy feedback.
-    const icp = (campaignIcp ?? workspace.icp) ?? "";
-    if (icp.trim() && workspace.anthropicKey) {
-      try {
-        const anthropicKey = decrypt(workspace.anthropicKey);
-        let classifyResult;
-        do {
-          classifyResult = await classifyLeads({
-            workspaceId: workspace.id,
-            batchId,
-            icp,
-            anthropicKey,
-            model: workspace.anthropicModel ?? undefined,
-            limit: 300,
-          });
-        } while (classifyResult.classified > 0 && classifyResult.total > 0);
-      } catch (err) {
-        console.warn("Auto-classify failed (continuing with generate):", err);
-      }
-    }
-
     const needsWorkWhere = {
       leadBatchId: batchId,
       OR: [
@@ -126,6 +104,7 @@ export async function POST(request: Request) {
     const useFastModel = useFastModelParam !== false;
     const model = useFastModel ? "claude-haiku-4-5" : (workspace.anthropicModel ?? "claude-haiku-4-5");
     const productSummary = workspace.productSummary ?? "";
+    const icp = (campaignIcp ?? workspace.icp) ?? "";
 
     const proofPointsJsonSource = campaignProofPoints ?? workspace.proofPointsJson;
     let proofPointsText = "";
