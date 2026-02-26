@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Personalized subject lines, LinkedIn & social proof",
+    description: "Subject lines are now highly personalized per lead (name, company, contextual hooks). Add a LinkedIn connection request step between email 1 and 2 — AI generates it per lead; copy to Sales Nav or Dripify. Social proof in Settings: similar companies and referral phrase for AI to weave into emails.",
+    author: "Mayank",
+    date: "2026-02-26",
+  },
+  {
     title: "Configurable sender name",
     description: "Set your sender name in Settings (e.g. 'John Smith, Gather') so emails sign off correctly. Fixes the bug where emails were signing as the recipient.",
     author: "Mayank",

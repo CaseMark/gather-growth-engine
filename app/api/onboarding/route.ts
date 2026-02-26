@@ -17,6 +17,8 @@ export async function POST(request: Request) {
     const anthropicKey = typeof body.anthropicKey === "string" ? body.anthropicKey.trim() : "";
     const instantlyKey = typeof body.instantlyKey === "string" ? body.instantlyKey.trim() : "";
     const senderName = typeof body.senderName === "string" ? body.senderName.trim() || null : null;
+    const similarCompanies = typeof body.similarCompanies === "string" ? body.similarCompanies.trim() || null : null;
+    const referralPhrase = typeof body.referralPhrase === "string" ? body.referralPhrase.trim() || null : null;
 
     if (!domain) {
       return NextResponse.json(
@@ -38,12 +40,18 @@ export async function POST(request: Request) {
     const encryptedAnthropicKey = anthropicKey ? encrypt(anthropicKey) : null;
     const encryptedInstantlyKey = instantlyKey ? encrypt(instantlyKey) : null;
 
+    const socialProofJson =
+      (similarCompanies?.trim() || referralPhrase?.trim())
+        ? JSON.stringify({ similarCompanies: similarCompanies ?? "", referralPhrase: referralPhrase ?? "" })
+        : null;
+
     // Upsert workspace (create or update). Keys optional: on update only set keys when non-empty (don't wipe when form sends empty).
     const workspace = await prisma.workspace.upsert({
       where: { userId: session.user.id },
       update: {
         domain,
         ...(senderName !== undefined && { senderName }),
+        socialProofJson,
         ...(anthropicKey && { anthropicKey: encryptedAnthropicKey }),
         ...(instantlyKey && { instantlyKey: encryptedInstantlyKey }),
       },
@@ -51,6 +59,7 @@ export async function POST(request: Request) {
         userId: session.user.id,
         domain,
         senderName: senderName ?? null,
+        socialProofJson,
         anthropicKey: encryptedAnthropicKey,
         instantlyKey: encryptedInstantlyKey,
       },
@@ -85,6 +94,7 @@ export async function GET(request: Request) {
         productSummary: true,
         anthropicModel: true,
         senderName: true,
+        socialProofJson: true,
         createdAt: true,
         updatedAt: true,
         anthropicKey: true,

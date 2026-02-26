@@ -37,6 +37,7 @@ export async function POST(request: Request) {
         productSummary: true,
         icp: true,
         proofPointsJson: true,
+        socialProofJson: true,
         playbookJson: true,
       },
     });
@@ -90,6 +91,18 @@ export async function POST(request: Request) {
         //
       }
     }
+    let socialProofText = "";
+    if (workspace.socialProofJson) {
+      try {
+        const sp = JSON.parse(workspace.socialProofJson) as { similarCompanies?: string; referralPhrase?: string };
+        const parts: string[] = [];
+        if (sp.similarCompanies?.trim()) parts.push(`Similar companies: ${sp.similarCompanies.trim()}`);
+        if (sp.referralPhrase?.trim()) parts.push(`Referral phrase: "${sp.referralPhrase.trim()}"`);
+        if (parts.length > 0) socialProofText = "\nSocial proof (weave in): " + parts.join(". ");
+      } catch {
+        //
+      }
+    }
 
     const structureBlock = guidelines?.structure
       ? `\nStructure: ${guidelines.structure}\nTone: ${guidelines.tone}`
@@ -107,7 +120,7 @@ ${productSummary}
 
 Overall ICP:
 ${icp}
-${proofPointsText}
+${proofPointsText}${socialProofText}
 ${structureBlock}
 
 THE USER WANTS TO SEE A SAMPLE FOR THIS LEAD:
@@ -135,7 +148,7 @@ ${productSummary}
 
 Overall ICP:
 ${icp}
-${proofPointsText}
+${proofPointsText}${socialProofText}
 ${structureBlock}
 
 Create 3 sample sequences. Each sequence has ${numSteps} emails. For each persona, write COMPLETE, ready-to-send emails (subject + body) — not templates or placeholders. Use real names, companies, and specifics as if writing to a real person in that role.

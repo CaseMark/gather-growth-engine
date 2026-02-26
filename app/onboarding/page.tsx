@@ -12,6 +12,8 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [domain, setDomain] = useState("");
   const [senderName, setSenderName] = useState("");
+  const [similarCompanies, setSimilarCompanies] = useState("");
+  const [referralPhrase, setReferralPhrase] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [instantlyKey, setInstantlyKey] = useState("");
   const [error, setError] = useState("");
@@ -27,6 +29,15 @@ export default function OnboardingPage() {
             setExistingData(data.workspace);
             setDomain(data.workspace.domain || "");
             setSenderName(data.workspace.senderName || "");
+            if (data.workspace.socialProofJson) {
+              try {
+                const sp = JSON.parse(data.workspace.socialProofJson);
+                setSimilarCompanies(sp.similarCompanies || "");
+                setReferralPhrase(sp.referralPhrase || "");
+              } catch {
+                //
+              }
+            }
           }
         })
         .catch(console.error);
@@ -66,6 +77,8 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           domain,
           senderName: senderName.trim() || null,
+          similarCompanies: similarCompanies.trim() || null,
+          referralPhrase: referralPhrase.trim() || null,
           anthropicKey,
           instantlyKey,
         }),
@@ -156,6 +169,41 @@ export default function OnboardingPage() {
             />
             <p className="mt-1 text-xs text-zinc-500">
               We'll crawl the home page of this domain to understand your product.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="similar_companies" className="block text-sm font-medium text-zinc-300">
+              Social proof — similar companies
+            </label>
+            <input
+              id="similar_companies"
+              name="similar_companies"
+              type="text"
+              placeholder="e.g. Acme, Beta Corp, Gamma Inc"
+              value={similarCompanies}
+              onChange={(e) => setSimilarCompanies(e.target.value)}
+              className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Companies like yours we&apos;ve helped. AI will weave these into emails (e.g. &quot;Companies like Acme and Beta use us for...&quot;).
+            </p>
+          </div>
+          <div>
+            <label htmlFor="referral_phrase" className="block text-sm font-medium text-zinc-300">
+              Social proof — referral phrase
+            </label>
+            <input
+              id="referral_phrase"
+              name="referral_phrase"
+              type="text"
+              placeholder="e.g. John from [Company] suggested I reach out"
+              value={referralPhrase}
+              onChange={(e) => setReferralPhrase(e.target.value)}
+              className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Template for referral intros. Use [Company] as placeholder. AI will use when relevant.
             </p>
           </div>
 

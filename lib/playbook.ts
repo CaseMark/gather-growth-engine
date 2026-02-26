@@ -9,6 +9,8 @@ export type PlaybookGuidelines = {
   structure: string;
   numSteps: number;
   stepDelays: number[];
+  /** When true, generate a LinkedIn connection request between email step 1 and 2. Stored per lead, shown for manual use. */
+  includeLinkedInStep?: boolean;
 };
 
 export type PlaybookLegacyStep = {
@@ -54,6 +56,7 @@ export function parsePlaybook(playbookJson: string | null): PlaybookParsed | nul
           structure: g.structure ?? "",
           numSteps,
           stepDelays,
+          includeLinkedInStep: Boolean(g.includeLinkedInStep),
         },
       };
     }

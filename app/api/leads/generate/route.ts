@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     const workspace = await prisma.workspace.findUnique({
       where: { userId: session.user.id },
-      select: { id: true, anthropicKey: true, anthropicModel: true, productSummary: true, icp: true, proofPointsJson: true, playbookJson: true, senderName: true },
+      select: { id: true, anthropicKey: true, anthropicModel: true, productSummary: true, icp: true, proofPointsJson: true, socialProofJson: true, playbookJson: true, senderName: true },
     });
 
     if (!workspace?.anthropicKey) {
@@ -91,8 +91,11 @@ export async function POST(request: Request) {
     }
 
     const { numSteps, guidelines, legacySteps } = parsed;
+    const includeLinkedIn = Boolean(guidelines?.includeLinkedInStep);
     const stepKeys = Array.from({ length: numSteps }, (_, i) => `step${i + 1}`).join(", ");
-    const stepExample = Array.from({ length: numSteps }, (_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
+    const stepExample = includeLinkedIn
+      ? `"step1": {"subject": "...", "body": "..."}, "linkedinMessage": "Hi [Name], I noticed...", "step2": {"subject": "...", "body": "..."}${numSteps > 2 ? `, "step3": {"subject": "...", "body": "..."}` : ""}`
+      : Array.from({ length: numSteps }, (_, i) => `"step${i + 1}": {"subject": "...", "body": "..."}`).join(", ");
 
     const structureBlock = guidelines?.structure
       ? `\nPlaybook structure (follow this flow, but write completely custom content for this lead):\n${guidelines.structure}\nTone: ${guidelines.tone}`
@@ -116,6 +119,19 @@ export async function POST(request: Request) {
         }
       } catch {
         proofPointsText = "";
+      }
+    }
+
+    let socialProofText = "";
+    if (workspace.socialProofJson) {
+      try {
+        const sp = JSON.parse(workspace.socialProofJson) as { similarCompanies?: string; referralPhrase?: string };
+        const parts: string[] = [];
+        if (sp.similarCompanies?.trim()) parts.push(`Similar companies using us: ${sp.similarCompanies.trim()}`);
+        if (sp.referralPhrase?.trim()) parts.push(`Referral phrase (use when relevant): "${sp.referralPhrase.trim()}"`);
+        if (parts.length > 0) socialProofText = "\nSocial proof (weave in naturally): " + parts.join(". ");
+      } catch {
+        socialProofText = "";
       }
     }
 
@@ -143,10 +159,17 @@ export async function POST(request: Request) {
         }
       }
 
-      const prompt = `You are writing a HYPER-PERSONALIZED cold outreach sequence (${numSteps} emails) for ONE specific lead. Write COMPLETELY custom emails for this person — not templates. Each email should feel like it was written specifically for them based on their role, company, industry, and how your product helps people like them.
+      const linkedInBlock = includeLinkedIn
+        ? `\n\nLINKEDIN: Also write a personalized LinkedIn connection request (300 chars max). This goes between email 1 and 2. Reference their role/company. Keep it punchy. Include "linkedinMessage" in your JSON.`
+        : "";
+      const stepDesc = includeLinkedIn
+        ? `${numSteps} emails + 1 LinkedIn message. JSON keys: step1, linkedinMessage, step2${numSteps > 2 ? ", step3, ..." : ""}`
+        : `${numSteps} emails. JSON keys: ${stepKeys}`;
+
+      const prompt = `You are writing a HYPER-PERSONALIZED cold outreach sequence for ONE specific lead. Write COMPLETELY custom emails for this person — not templates. Each email should feel like it was written specifically for them based on their role, company, industry, and how your product helps people like them.
 
 Product summary: ${productSummary}
-ICP: ${icp}${proofPointsText}${structureBlock}${strategyBlock}
+ICP: ${icp}${proofPointsText}${socialProofText}${structureBlock}${strategyBlock}
 
 THIS LEAD:
 - Email: ${lead.email}
@@ -155,12 +178,14 @@ THIS LEAD:
 - Company: ${lead.company ?? "unknown"}
 - Industry: ${lead.industry ?? "unknown"}${lead.persona || lead.vertical ? `\n- Persona: ${lead.persona ?? ""}\n- Vertical: ${lead.vertical ?? ""}` : ""}
 
-Write ${numSteps} emails. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.
+SUBJECT LINES: Write HIGHLY PERSONALIZED subject lines for each email. Use their name, company, or a contextual hook (e.g. "Quick question about [Company]'s growth", "Re: ${(lead.name ?? "").split(/\s+/)[0] || "you"} at ${lead.company ?? "your company"}"). Avoid generic subjects like "Quick question" or "Following up".
+
+Write ${stepDesc}. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.${socialProofText ? " Weave in social proof (similar companies, referral) where it fits naturally." : ""}
 
 CRITICAL: Sign off as the SENDER, never as the recipient. Use their name only in the greeting (e.g. "Hey Bo,"). For the signature, use: ${workspace.senderName?.trim() ? workspace.senderName.trim() : "Best, [Your name] or The team at [Company]"}. Never use the recipient's name in the sign-off.
+${linkedInBlock}
 
-Respond with ONLY a valid JSON object with keys ${stepKeys}. Each step: { "subject": "...", "body": "..." }
-Example: {${stepExample}}`;
+Respond with ONLY a valid JSON object. Each email step: { "subject": "...", "body": "..." }. Example: {${stepExample}}`;
 
       let usage = { input_tokens: 0, output_tokens: 0 };
       try {
@@ -169,18 +194,21 @@ Example: {${stepExample}}`;
         let jsonStr = raw.trim();
         const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlock) jsonStr = codeBlock[1].trim();
-        const parsed = JSON.parse(jsonStr) as Record<string, { subject?: string; body?: string }>;
+        const parsed = JSON.parse(jsonStr) as Record<string, { subject?: string; body?: string } | string>;
+        const linkedinMsg = includeLinkedIn && typeof parsed.linkedinMessage === "string" ? parsed.linkedinMessage.trim() : null;
 
         const stepsArray = Array.from({ length: numSteps }, (_, i) => {
           const key = `step${i + 1}`;
           const step = parsed[key];
+          const s = typeof step === "object" && step ? step : {};
           return {
-            subject: (step?.subject ?? "").trim(),
-            body: (step?.body ?? "").trim(),
+            subject: (s.subject ?? "").trim(),
+            body: (s.body ?? "").trim(),
           };
         });
         const update: Record<string, string | null> = {
           stepsJson: JSON.stringify(stepsArray),
+          ...(includeLinkedIn && { linkedinMessage: linkedinMsg }),
         };
         if (stepsArray[0]) {
           update.step1Subject = stepsArray[0].subject || null;
@@ -211,6 +239,7 @@ Example: {${stepExample}}`;
           step2Body: fallbackSteps[1]?.body ?? null,
           step3Subject: fallbackSteps[2]?.subject ?? null,
           step3Body: fallbackSteps[2]?.body ?? null,
+          ...(includeLinkedIn && { linkedinMessage: null }),
         };
         await prisma.lead.update({
           where: { id: lead.id },
