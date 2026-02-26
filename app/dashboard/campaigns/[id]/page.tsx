@@ -1191,6 +1191,52 @@ export default function CampaignPage() {
                         <p className="text-xs text-zinc-500">
                           {(selectedAccountEmails === null ? instantlyAccounts.length : selectedAccountEmails.length)} of {instantlyAccounts.length} selected
                         </p>
+                        {(() => {
+                          const filtered = instantlyAccounts.filter(
+                            (a) => !accountSearch.trim() || a.email.toLowerCase().includes(accountSearch.toLowerCase())
+                          );
+                          const domainMap = new Map<string, string[]>();
+                          for (const a of filtered) {
+                            const domain = a.email.includes("@") ? a.email.split("@")[1]?.toLowerCase() ?? "unknown" : "unknown";
+                            if (!domainMap.has(domain)) domainMap.set(domain, []);
+                            domainMap.get(domain)!.push(a.email);
+                          }
+                          const domains = Array.from(domainMap.entries()).sort((a, b) => b[1].length - a[1].length);
+                          return domains.length > 1 ? (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {domains.map(([domain, emails]) => {
+                                const selected = selectedAccountEmails ?? [];
+                                const selectedInDomain = emails.filter((e) => selected.includes(e)).length;
+                                const allSelected = selectedInDomain === emails.length;
+                                return (
+                                  <button
+                                    key={domain}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAccountEmails((prev) => {
+                                        const current = prev ?? [];
+                                        if (allSelected) {
+                                          return current.filter((e) => !emails.includes(e));
+                                        }
+                                        const added = new Set(current);
+                                        emails.forEach((e) => added.add(e));
+                                        return Array.from(added);
+                                      });
+                                    }}
+                                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                                      allSelected
+                                        ? "bg-emerald-600/80 text-white hover:bg-emerald-500"
+                                        : "bg-zinc-700/80 text-zinc-300 hover:bg-zinc-600"
+                                    }`}
+                                    title={allSelected ? `Unselect all ${emails.length} from ${domain}` : `Select all ${emails.length} from ${domain}`}
+                                  >
+                                    {domain} ({emails.length})
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null;
+                        })()}
                         <div className="max-h-48 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900/50 p-2 space-y-1">
                           {instantlyAccounts
                             .filter((a) => !accountSearch.trim() || a.email.toLowerCase().includes(accountSearch.toLowerCase()))

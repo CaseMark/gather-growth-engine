@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Domain pills for Instantly accounts",
+    description: "Select or unselect whole domains at once with pill buttons (e.g. perfectgather.com, instantgather.com). Pills appear when you have accounts from multiple domains.",
+    author: "AI",
+    date: "2026-02-26",
+  },
+  {
     title: "Next.js upgrade compatibility",
     description: "Build config updated for Next.js 16 (Turbopack) so future upgrades build correctly.",
     author: "AI",
