@@ -171,7 +171,9 @@ model Lead {
   name               String?
   jobTitle           String?
   company            String?
+  website            String?   // company URL for web scraping
   industry           String?
+  landingPageToken   String?   // token for personalized landing page
   emailVerified      Boolean?  // true/false after verify step; null = not checked
   persona            String?   // from classify (e.g. "VP Sales")
   vertical           String?   // from classify (e.g. "SaaS")

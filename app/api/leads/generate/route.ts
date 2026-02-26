@@ -6,6 +6,8 @@ import { decrypt } from "@/lib/encryption";
 import { callAnthropic } from "@/lib/anthropic";
 import { getAggregatedMemory } from "@/lib/performance-memory";
 import { parsePlaybook } from "@/lib/playbook";
+import { scrapeForContext } from "@/lib/scrape";
+import { randomUUID } from "crypto";
 
 // Allow up to 60s so a few Anthropic calls can finish (Vercel Pro; Hobby may still cap at 10s)
 export const maxDuration = 60;
@@ -18,7 +20,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { batchId, offset: offsetParam, limit: limitParam, campaignId: campaignIdParam, useFastModel: useFastModelParam } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string; useFastModel?: boolean };
+    const {
+      batchId,
+      offset: offsetParam,
+      limit: limitParam,
+      campaignId: campaignIdParam,
+      useFastModel: useFastModelParam,
+      useWebScraping: useWebScrapingParam,
+      useLandingPage: useLandingPageParam,
+    } = body as { batchId: string; offset?: number; limit?: number; campaignId?: string; useFastModel?: boolean; useWebScraping?: boolean; useLandingPage?: boolean };
+    const useWebScraping = useWebScrapingParam === true;
+    const useLandingPage = useLandingPageParam === true;
 
     if (!batchId) {
       return NextResponse.json({ error: "batchId is required" }, { status: 400 });
@@ -74,7 +86,7 @@ export async function POST(request: Request) {
       prisma.lead.count({ where: needsWorkWhere }),
       prisma.lead.findMany({
         where: needsWorkWhere,
-        select: { id: true, email: true, name: true, jobTitle: true, company: true, industry: true, persona: true, vertical: true },
+        select: { id: true, email: true, name: true, jobTitle: true, company: true, website: true, industry: true, persona: true, vertical: true },
         orderBy: { id: "asc" },
         skip: offset,
         take: limit,
@@ -139,7 +151,25 @@ export async function POST(request: Request) {
       memory = null;
     }
 
+    const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+
     const processLead = async (lead: (typeof chunk)[0]) => {
+      let companyContextBlock = "";
+      if (useWebScraping && lead.website?.trim()) {
+        const scraped = await scrapeForContext(lead.website.trim());
+        if (scraped) {
+          companyContextBlock = `\n\nCompany website context (use to personalize — recent news, products, tone):\n${scraped}`;
+        }
+      }
+
+      let landingPageBlock = "";
+      let landingPageToken: string | null = null;
+      if (useLandingPage && baseUrl) {
+        landingPageToken = randomUUID();
+        const lpUrl = `${baseUrl.replace(/\/$/, "")}/lp/${landingPageToken}`;
+        landingPageBlock = `\n\nInclude this personalized landing page link in at least one email (e.g. step 1 or 2): ${lpUrl}. Write a compelling reason for them to click (e.g. "I put together a quick demo for [Company]" or "Here's a resource tailored for your team").`;
+      }
+
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
         const parts: string[] = [];
@@ -182,11 +212,11 @@ THIS LEAD:
 - Name: ${lead.name ?? "unknown"}
 - Job title: ${lead.jobTitle ?? "unknown"}
 - Company: ${lead.company ?? "unknown"}
-- Industry: ${lead.industry ?? "unknown"}${lead.persona || lead.vertical ? `\n- Persona: ${lead.persona ?? ""}\n- Vertical: ${lead.vertical ?? ""}` : ""}
+- Industry: ${lead.industry ?? "unknown"}${lead.website ? `\n- Company website: ${lead.website}` : ""}${lead.persona || lead.vertical ? `\n- Persona: ${lead.persona ?? ""}\n- Vertical: ${lead.vertical ?? ""}` : ""}${companyContextBlock}
 
 SUBJECT LINES: Write HIGHLY PERSONALIZED subject lines for each email. Use their name, company, or a contextual hook (e.g. "Quick question about [Company]'s growth", "Re: ${(lead.name ?? "").split(/\s+/)[0] || "you"} at ${lead.company ?? "your company"}"). Avoid generic subjects like "Quick question" or "Following up".
 
-Write ${numSteps} emails. JSON keys: ${stepKeys}. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.${socialProofText ? " Weave in social proof (similar companies, referral) where it fits naturally." : ""}
+Write ${numSteps} emails. JSON keys: ${stepKeys}. Use their real name, company, and context throughout. Do NOT use placeholders like {{firstName}} — write "Hey, ${(lead.name ?? "there").split(/\s+/)[0] || "there"}," etc. Tailor each email to their specific situation. Make it feel 1:1.${socialProofText ? " Weave in social proof (similar companies, referral) where it fits naturally." : ""}${landingPageBlock}
 
 CRITICAL: Sign off as the SENDER, never as the recipient. Use their name only in the greeting (e.g. "Hey Bo,"). For the signature, use: ${workspace.senderName?.trim() ? workspace.senderName.trim() : "Best, [Your name] or The team at [Company]"}. Never use the recipient's name in the sign-off.
 
@@ -212,6 +242,7 @@ Respond with ONLY a valid JSON object with keys ${stepKeys}. Each step: { "subje
         });
         const update: Record<string, string | null> = {
           stepsJson: JSON.stringify(stepsArray),
+          ...(landingPageToken ? { landingPageToken } : {}),
         };
         if (stepsArray[0]) {
           update.step1Subject = stepsArray[0].subject || null;

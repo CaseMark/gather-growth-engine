@@ -47,6 +47,8 @@ export default function CampaignPage() {
   const [generateError, setGenerateError] = useState("");
   const [generateProgress, setGenerateProgress] = useState<{ total: number; generated: number } | null>(null);
   const [useFastModel, setUseFastModel] = useState(true);
+  const [useWebScraping, setUseWebScraping] = useState(false);
+  const [useLandingPage, setUseLandingPage] = useState(false);
   const [csvInput, setCsvInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -278,7 +280,7 @@ export default function CampaignPage() {
         const res = await fetch("/api/leads/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10, useFastModel }),
+          body: JSON.stringify({ batchId: selectedBatchId, campaignId: id, limit: 10, useFastModel, useWebScraping, useLandingPage }),
         });
         const text = await res.text();
         let data: { error?: string } = {};
@@ -837,13 +839,13 @@ export default function CampaignPage() {
               {step === "sequences" && (
                 <div className="space-y-4">
                   <h2 className="text-lg font-medium text-zinc-200">Leads & sequences</h2>
-                  <p className="text-sm text-zinc-500">Upload a CSV (email, name, company, job title), paste a Google Sheets URL, or select an existing list. Then generate personalized email sequences for each lead.</p>
+                  <p className="text-sm text-zinc-500">Upload a CSV (email, name, company, job title, website), paste a Google Sheets URL, or select an existing list. Then generate personalized email sequences for each lead.</p>
                   <div>
                     <label className="block text-sm text-zinc-400 mb-1">Paste CSV</label>
                     <textarea
                       value={csvInput}
                       onChange={(e) => setCsvInput(e.target.value)}
-                      placeholder="email,name,company,job title\njane@acme.com,Jane,Acme,VP Sales"
+                      placeholder="email,name,company,job title,website\njane@acme.com,Jane,Acme,VP Sales,acme.com"
                       rows={3}
                       className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
                     />
@@ -894,6 +896,34 @@ export default function CampaignPage() {
                     </div>
                   )}
                   {generateError && <p className="text-sm text-amber-400">{generateError}</p>}
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                    <h3 className="text-sm font-medium text-zinc-300 mb-2">Enhancement options</h3>
+                    <p className="text-xs text-zinc-500 mb-3">Give the AI more context and tools for richer emails.</p>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useWebScraping}
+                          onChange={(e) => setUseWebScraping(e.target.checked)}
+                          className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        Web scraping — fetch company website for context (requires website column in CSV)
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useLandingPage}
+                          onChange={(e) => setUseLandingPage(e.target.checked)}
+                          className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        Personalized landing page — unique link per lead (AI includes it in emails)
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-zinc-500 cursor-not-allowed">
+                        <input type="checkbox" disabled className="rounded border-zinc-600 bg-zinc-800" />
+                        Video (coming soon)
+                      </label>
+                    </div>
+                  </div>
                   <button
                     onClick={generateAll}
                     disabled={!selectedBatchId || generating}

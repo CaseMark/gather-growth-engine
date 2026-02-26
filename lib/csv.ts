@@ -53,10 +53,13 @@ const COLUMN_ALIASES: Record<string, string> = {
   company: "company",
   company_name: "company",
   organization: "company",
+  website: "website",
+  company_url: "website",
+  company_website: "website",
   industry: "industry",
 };
 
-export function normalizeRow(row: Record<string, string>): { email: string; name?: string; jobTitle?: string; company?: string; industry?: string } {
+export function normalizeRow(row: Record<string, string>): { email: string; name?: string; jobTitle?: string; company?: string; website?: string; industry?: string } {
   const get = (...keys: string[]) => {
     for (const k of keys) {
       const v = row[k] ?? row[COLUMN_ALIASES[k]];
@@ -65,11 +68,14 @@ export function normalizeRow(row: Record<string, string>): { email: string; name
     return "";
   };
   const email = get("email", "e_mail", "work_email") || Object.values(row)[0] || "";
+  const rawWebsite = get("website", "company_url", "company_website");
+  const website = rawWebsite ? (rawWebsite.startsWith("http") ? rawWebsite : `https://${rawWebsite.replace(/^www\./, "")}`) : undefined;
   return {
     email,
     name: get("name", "first_name", "firstname", "full_name", "fullname") || undefined,
     jobTitle: get("job_title", "jobtitle", "title") || undefined,
     company: get("company", "company_name", "organization") || undefined,
+    website: website || undefined,
     industry: get("industry") || undefined,
   };
 }

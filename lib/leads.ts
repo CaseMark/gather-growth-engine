@@ -5,6 +5,7 @@ export type NormalizedLead = {
   name?: string;
   jobTitle?: string;
   company?: string;
+  website?: string;
   industry?: string;
 };
 
@@ -59,6 +60,7 @@ export async function createBatchWithLeads(
       name: l.name?.trim() || null,
       jobTitle: l.jobTitle?.trim() || null,
       company: l.company?.trim() || null,
+      website: l.website?.trim() || null,
       industry: l.industry?.trim() || null,
     })),
   });
