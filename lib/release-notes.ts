@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Strategy feedback loop",
+    description: "Dashboard now syncs analytics from Instantly automatically and shows strategy suggestions. When generating sequences, the AI applies learnings: shorter subject lines for low-open personas, maintain style for high-open segments. Run Classify on leads so we can tailor by persona/vertical.",
+    author: "Mayank",
+    date: "2026-02-26",
+  },
+  {
     title: "Personalized subject lines & social proof",
     description: "Subject lines are now highly personalized per lead (name, company, contextual hooks). Social proof in Settings: similar companies and referral phrase for AI to weave into emails.",
     author: "Mayank",

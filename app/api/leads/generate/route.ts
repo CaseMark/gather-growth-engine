@@ -143,16 +143,32 @@ export async function POST(request: Request) {
       let strategyBlock = "";
       if (memory && (lead.persona || lead.vertical)) {
         const parts: string[] = [];
+        const instructions: string[] = [];
         if (lead.persona && memory.byPersona[lead.persona]) {
           const p = memory.byPersona[lead.persona];
-          parts.push(`Persona "${lead.persona}": open rate ${p.open_rate_pct_avg ?? "?"}%, click rate ${p.click_rate_pct_avg ?? "?"}%, ${p.positive_reply_count ?? 0} positive replies`);
+          const openRate = p.open_rate_pct_avg ?? 0;
+          parts.push(`Persona "${lead.persona}": open rate ${openRate}%, click rate ${p.click_rate_pct_avg ?? "?"}%, ${p.positive_reply_count ?? 0} positive replies`);
+          if (openRate > 0 && openRate < 15) {
+            instructions.push(`For "${lead.persona}" (low ${openRate}% open rate): write SHORTER subject lines (under 50 chars), use curiosity hooks or questions.`);
+          } else if (openRate >= 25) {
+            instructions.push(`For "${lead.persona}" (strong ${openRate}% open rate): keep similar subject style that worked.`);
+          }
         }
         if (lead.vertical && memory.byVertical[lead.vertical]) {
           const v = memory.byVertical[lead.vertical];
-          parts.push(`Vertical "${lead.vertical}": open rate ${v.open_rate_pct_avg ?? "?"}%, click rate ${v.click_rate_pct_avg ?? "?"}%, ${v.positive_reply_count ?? 0} positive replies`);
+          const posReplies = v.positive_reply_count ?? 0;
+          parts.push(`Vertical "${lead.vertical}": open rate ${v.open_rate_pct_avg ?? "?"}%, ${posReplies} positive replies`);
+          if (posReplies > 0) {
+            instructions.push(`Vertical "${lead.vertical}" converts — emphasize value and proof that resonate with this segment.`);
+          }
         }
         if (parts.length > 0) {
-          strategyBlock = "\n\nPerformance so far for this segment (use to tailor tone and emphasis): " + parts.join("; ");
+          strategyBlock = "\n\nPerformance data for this segment: " + parts.join("; ");
+          if (instructions.length > 0) {
+            strategyBlock += "\n\nAPPLY these learnings: " + instructions.join(" ");
+          } else {
+            strategyBlock += "\n\nUse this to tailor tone, subject lines, and emphasis.";
+          }
         }
       }
 

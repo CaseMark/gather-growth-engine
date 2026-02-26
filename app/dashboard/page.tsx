@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [aggregate, setAggregate] = useState<Aggregate>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [strategySuggestion, setStrategySuggestion] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -58,6 +59,20 @@ export default function DashboardPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [session?.user?.id]);
+
+  // Sync analytics from Instantly and fetch strategy suggestion (runs in background when workspace is ready)
+  useEffect(() => {
+    if (!session?.user?.id || !workspace?.domain) return;
+    fetch("/api/performance-memory/sync", { method: "POST" })
+      .then(() => fetch("/api/performance-memory"))
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.suggestion && typeof data.suggestion === "string") {
+          setStrategySuggestion(data.suggestion);
+        }
+      })
+      .catch(() => {});
+  }, [session?.user?.id, workspace?.domain]);
 
   const handleLaunchNew = async () => {
     setCreating(true);
@@ -170,6 +185,16 @@ export default function DashboardPage() {
                   {creating ? "Creating…" : "Launch new campaign"}
                 </button>
               </div>
+
+              {strategySuggestion && (
+                <div className="mt-8 rounded-xl border border-amber-800/50 bg-amber-950/20 p-5">
+                  <h2 className="text-sm font-medium text-amber-200 mb-2">Strategy update (from your data)</h2>
+                  <p className="text-sm text-amber-100/90">{strategySuggestion}</p>
+                  <p className="mt-2 text-xs text-amber-200/60">
+                    These learnings are applied when you generate new sequences. Run &quot;Classify&quot; on leads so we can tailor by persona/vertical.
+                  </p>
+                </div>
+              )}
 
               {aggregate && (aggregate.totalCampaigns > 0 || aggregate.totalLeads > 0 || aggregate.totalReplies > 0) && (
                 <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
