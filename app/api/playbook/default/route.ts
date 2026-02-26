@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         const anthropicKey = decrypt(workspace.anthropicKey);
         const model = workspace.anthropicModel ?? undefined;
         const numSteps = 5;
-        const delays = [0, 3, 5, 7, 10];
+        const delays = [1, 3, 5, 7, 10];
 
         let proofBlock = "";
         if (workspace.proofPointsJson) {

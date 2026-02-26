@@ -13,6 +13,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    title: "Minimum 1-day gap between first two emails",
+    description: "Step 1 and Step 2 no longer go out together. We enforce at least 1 day between them so your sequence doesn't look like a double-send.",
+    author: "AI",
+    date: "2026-02-26",
+  },
+  {
     title: "Domain pills for Instantly accounts",
     description: "Select or unselect whole domains at once with pill buttons (e.g. perfectgather.com, instantgather.com). Pills appear when you have accounts from multiple domains.",
     author: "AI",

@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       const numSteps = Math.min(10, Math.max(1, bodyGuidelines.numSteps ?? 3));
       const stepDelays = Array.isArray(bodyGuidelines.stepDelays) && bodyGuidelines.stepDelays.length >= numSteps
         ? bodyGuidelines.stepDelays.slice(0, numSteps)
-        : [0, 3, 5, 7, 10].slice(0, numSteps);
+        : [1, 3, 5, 7, 10].slice(0, numSteps);
       parsed = { numSteps, stepDelays, guidelines: { tone: bodyGuidelines.tone ?? "", structure: bodyGuidelines.structure, numSteps, stepDelays } };
     } else {
       let playbookSource = workspace.playbookJson;
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     if (!parsed) {
       const hasCustom = customLead && (customLead.jobTitle?.trim() || customLead.companyUrl?.trim());
       if (hasCustom) {
-        parsed = { numSteps: 3, stepDelays: [0, 3, 5], guidelines: { tone: "direct, consultative", structure: "Step 1: Hook. Step 2: Value. Step 3: CTA.", numSteps: 3, stepDelays: [0, 3, 5] } };
+        parsed = { numSteps: 3, stepDelays: [1, 3, 5], guidelines: { tone: "direct, consultative", structure: "Step 1: Hook. Step 2: Value. Step 3: CTA.", numSteps: 3, stepDelays: [1, 3, 5] } };
       } else {
         return NextResponse.json(
           { error: "No playbook found. Define guidelines first, or add a job title and company to generate a sample." },

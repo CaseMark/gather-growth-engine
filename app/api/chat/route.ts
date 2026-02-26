@@ -68,7 +68,7 @@ Output format: First your reply. Then, ONLY if making edits, add:
       "tone": "...",
       "structure": "Step 1: ... Step 2: ... (describe what each step accomplishes)",
       "numSteps": 3,
-      "stepDelays": [0, 3, 5]
+      "stepDelays": [1, 3, 5]
     }
   }
 }

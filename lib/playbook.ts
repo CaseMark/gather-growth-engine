@@ -25,7 +25,7 @@ export type PlaybookParsed = {
   legacySteps?: PlaybookLegacyStep[];
 };
 
-const DEFAULT_DELAYS = [0, 3, 5];
+const DEFAULT_DELAYS = [1, 3, 5];
 
 /**
  * Parse playbook JSON. Supports both new (guidelines) and legacy (steps) formats.
@@ -42,7 +42,7 @@ export function parsePlaybook(playbookJson: string | null): PlaybookParsed | nul
     if (pb?.guidelines) {
       const g = pb.guidelines;
       const numSteps = Math.min(10, Math.max(1, g.numSteps ?? 3));
-      const baseDelays = [0, 3, 5, 7, 10];
+      const baseDelays = [1, 3, 5, 7, 10];
       const stepDelays = Array.isArray(g.stepDelays) && g.stepDelays.length >= numSteps
         ? g.stepDelays.slice(0, numSteps)
         : baseDelays.slice(0, numSteps);

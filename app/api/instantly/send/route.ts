@@ -103,11 +103,12 @@ export async function POST(request: Request) {
     const playbookSource = flowCampaign?.playbookJson ?? workspace.playbookJson;
     const parsed = parsePlaybook(playbookSource);
     const numStepsFromPlaybook = parsed?.numSteps ?? 3;
-    const stepDelays = parsed?.stepDelays ?? [0, 3, 5];
+    const stepDelays = parsed?.stepDelays ?? [1, 3, 5];
     const minGapDays = () => 2 + Math.floor(Math.random() * 2);
     const sequenceSteps = getSequenceSteps(numStepsFromPlaybook, stepDelays).map((s, i) => ({
       ...s,
-      delayDays: i === 0 ? 0 : Math.max(s.delayDays, minGapDays()),
+      // Step 0: min 1 day so Step 1 and Step 2 don't go out together. Other steps: min 2–3 days.
+      delayDays: i === 0 ? Math.max(s.delayDays, 1) : Math.max(s.delayDays, minGapDays()),
     }));
 
     // Get a lead's steps array (from stepsJson or legacy step1/2/3), padded to numSteps

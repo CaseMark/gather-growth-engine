@@ -38,7 +38,7 @@ export default function CampaignPage() {
     structure: string;
     numSteps: number;
     stepDelays: number[];
-  }>({ tone: "direct, consultative", structure: "", numSteps: 3, stepDelays: [0, 3, 5] });
+  }>({ tone: "direct, consultative", structure: "", numSteps: 3, stepDelays: [1, 3, 5] });
   const [savingPlaybook, setSavingPlaybook] = useState(false);
   const [playbookError, setPlaybookError] = useState("");
   const [batches, setBatches] = useState<Array<{ id: string; name: string | null; leadCount: number }>>([]);
@@ -119,7 +119,7 @@ export default function CampaignPage() {
                   tone: g.tone ?? "direct, consultative",
                   structure: g.structure ?? "",
                   numSteps: Math.min(10, Math.max(1, g.numSteps ?? 3)),
-                  stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
+                  stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [1, 3, 5],
                 });
               } else if (pb?.steps?.length) {
                 const steps = pb.steps;
@@ -597,7 +597,7 @@ export default function CampaignPage() {
                                   tone: g.tone ?? "direct, consultative",
                                   structure: g.structure ?? "",
                                   numSteps: g.numSteps ?? 3,
-                                  stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
+                                  stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [1, 3, 5],
                                 });
                                 setCampaign((c) => c ? { ...c, playbookJson: JSON.stringify(data.playbook) } : null);
                               }
@@ -633,7 +633,7 @@ export default function CampaignPage() {
                                     tone: g.tone ?? "direct, consultative",
                                     structure: g.structure ?? "",
                                     numSteps: g.numSteps ?? 3,
-                                    stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [0, 3, 5],
+                                    stepDelays: Array.isArray(g.stepDelays) ? g.stepDelays : [1, 3, 5],
                                   });
                                   setCampaign((c) => c ? { ...c, playbookJson: JSON.stringify(data.playbook) } : null);
                                 }
@@ -738,7 +738,7 @@ export default function CampaignPage() {
                             value={editingGuidelines.numSteps}
                             onChange={(e) => {
                               const n = Number(e.target.value);
-                              const base = [0, 3, 5, 7, 10];
+                              const base = [1, 3, 5, 7, 10];
                               setEditingGuidelines((g) => ({ ...g, numSteps: n, stepDelays: base.slice(0, n) }));
                             }}
                             className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"

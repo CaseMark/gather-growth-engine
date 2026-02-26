@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         const numSteps = Math.min(10, Math.max(1, g.numSteps ?? 3));
         const stepDelays = Array.isArray(g.stepDelays) && g.stepDelays.length >= numSteps
           ? g.stepDelays.slice(0, numSteps)
-          : [0, 3, 5, 7, 10].slice(0, numSteps);
+          : [1, 3, 5, 7, 10].slice(0, numSteps);
         const toStore = {
           guidelines: {
             tone: typeof g.tone === "string" ? g.tone : "direct, consultative",
@@ -174,9 +174,9 @@ export async function POST(request: Request) {
     const anthropicKey = decrypt(workspace.anthropicKey);
 
     const delayDaysExamples: Record<number, number[]> = {
-      3: [0, 3, 5],
-      4: [0, 3, 5, 7],
-      5: [0, 3, 5, 7, 10],
+      3: [1, 3, 5],
+      4: [1, 3, 5, 7],
+      5: [1, 3, 5, 7, 10],
     };
     const delays = delayDaysExamples[numSteps];
 
