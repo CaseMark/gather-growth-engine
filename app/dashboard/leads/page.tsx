@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useEffect, useMemo } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { APP_DISPLAY_NAME } from "@/lib/app-config";
 
@@ -293,7 +293,8 @@ export default function LeadsPage() {
                   </tr>
                 ) : (
                   filtered.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-zinc-900/40">
+                    <Fragment key={lead.id}>
+                    <tr className="hover:bg-zinc-900/40">
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"
@@ -351,6 +352,7 @@ export default function LeadsPage() {
                         </td>
                       </tr>
                     )}
+                    </Fragment>
                   ))
                 )}
               </tbody>
