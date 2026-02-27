@@ -30,6 +30,15 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // Restrict sign-ins to allowed email domains
+        const allowedDomains = (process.env.ALLOWED_EMAIL_DOMAINS || "").split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
+        if (allowedDomains.length > 0) {
+          const emailDomain = credentials.email.split("@")[1]?.toLowerCase();
+          if (!emailDomain || !allowedDomains.includes(emailDomain)) {
+            return null;
+          }
+        }
+
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });

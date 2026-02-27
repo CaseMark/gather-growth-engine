@@ -15,6 +15,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Restrict signups to allowed email domains
+    const allowedDomains = (process.env.ALLOWED_EMAIL_DOMAINS || "").split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
+    if (allowedDomains.length > 0) {
+      const emailDomain = email.split("@")[1]?.toLowerCase();
+      if (!emailDomain || !allowedDomains.includes(emailDomain)) {
+        return NextResponse.json(
+          { error: "Sign-ups are restricted to authorized email domains." },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
