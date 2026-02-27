@@ -50,9 +50,14 @@ function ComposeInner() {
     fetch("/api/instantly/accounts")
       .then((r) => r.json())
       .then((data) => {
-        if (data.accounts) {
+        if (data.accounts && data.accounts.length > 0) {
           setAccounts(data.accounts);
-          if (data.accounts.length > 0) setSelectedFrom(data.accounts[0].email);
+          // Pick the best account: prefer warmup_status=1 (active/warmed), then 0 (paused), avoid negative (banned/spam)
+          const sorted = [...data.accounts].sort((a: { warmup_status: number }, b: { warmup_status: number }) => {
+            const rank = (s: number) => s === 1 ? 0 : s === 0 ? 1 : 2;
+            return rank(a.warmup_status) - rank(b.warmup_status);
+          });
+          setSelectedFrom(sorted[0].email);
         }
       })
       .catch(() => {});
@@ -176,7 +181,7 @@ function ComposeInner() {
                         >
                           {accounts.map((a) => (
                             <option key={a.email} value={a.email}>
-                              {a.email} {a.warmup_status === 1 ? "✓" : a.warmup_status === 0 ? "(warming)" : ""}
+                              {a.email} {a.warmup_status === 1 ? "✅ ready" : a.warmup_status === 0 ? "🔥 warming" : "⚠️ issue"}
                             </option>
                           ))}
                         </select>
