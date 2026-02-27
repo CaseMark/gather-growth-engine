@@ -127,6 +127,9 @@ export default function DashboardPage() {
             <Link href="/dashboard" className="font-medium text-zinc-200">
               Dashboard
             </Link>
+            <Link href="/dashboard/leads" className="text-zinc-500 hover:text-zinc-200">
+              Leads
+            </Link>
             <Link href="/dashboard/features" className="text-zinc-500 hover:text-zinc-200">
               Feature Request
             </Link>

@@ -80,11 +80,69 @@ export async function POST(request: Request) {
       batchName,
     });
 
+    // Auto-assign to matching campaign based on ICP tag in source
+    let autoAssignedCampaign: string | null = null;
+    if (source) {
+      const icpMap: Record<string, string[]> = {
+        "court-reporting": ["court reporting"],
+        "law-firm": ["law firm", "solo & small", "mid & large"],
+        "medical-records": ["medical records"],
+        "mortgage-title": ["mortgage", "title"],
+      };
+
+      // Extract ICP tag from source like "rb2b:court-reporting:casemark.com"
+      const parts = source.split(":");
+      const icpTag = parts.length >= 2 ? parts[1] : null;
+
+      if (icpTag && icpTag !== "general") {
+        // Find matching campaign by ICP tag or name
+        const searchTerms = icpMap[icpTag] || [icpTag];
+        const campaigns = await prisma.campaign.findMany({
+          where: { workspaceId: workspace.id },
+          select: { id: true, name: true, leadBatchId: true },
+        });
+
+        const match = campaigns.find((c) => {
+          const name = c.name.toLowerCase();
+          return searchTerms.some((term) => name.includes(term));
+        });
+
+        if (match) {
+          // Get or create a batch for this campaign
+          let targetBatchId = match.leadBatchId;
+          if (!targetBatchId) {
+            const campaignBatch = await prisma.leadBatch.create({
+              data: { workspaceId: workspace.id, name: `${match.name} leads` },
+            });
+            targetBatchId = campaignBatch.id;
+            await prisma.campaign.update({
+              where: { id: match.id },
+              data: { leadBatchId: targetBatchId },
+            });
+          }
+
+          // Move leads from the ingest batch to the campaign batch
+          const ingestBatchLeads = await prisma.lead.findMany({
+            where: { leadBatchId: batchId },
+            select: { id: true },
+          });
+          if (ingestBatchLeads.length > 0) {
+            await prisma.lead.updateMany({
+              where: { id: { in: ingestBatchLeads.map((l) => l.id) } },
+              data: { leadBatchId: targetBatchId },
+            });
+          }
+          autoAssignedCampaign = match.name;
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       batchId,
       count,
       skippedDuplicate,
+      autoAssignedCampaign,
     });
   } catch (error) {
     console.error("Ingest error:", error);
