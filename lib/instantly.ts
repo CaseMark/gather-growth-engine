@@ -365,6 +365,23 @@ function createInstantlyClient(apiKey: string) {
       return request("POST", `/campaigns/${campaignId}/pause`);
     },
 
+    /** Send a one-off email via Instantly Unibox. */
+    async sendEmail(opts: {
+      from: string;       // sending account email
+      to: string;         // recipient email
+      subject: string;
+      body: string;       // HTML or plain text
+      eoi?: string;       // email_of_interest (for threading)
+    }): Promise<unknown> {
+      return request("POST", `/unibox/emails`, {
+        from_address_email: opts.from,
+        to_address_email_list: [opts.to],
+        subject: opts.subject,
+        body: opts.body.replace(/\n/g, "<br>"),
+        eoi: opts.eoi || opts.to,
+      });
+    },
+
     /** Get campaign analytics (opens, clicks, sent, etc.). */
     async getCampaignAnalytics(
       campaignId: string,

@@ -337,8 +337,9 @@ export default function LeadsPage() {
                           <button
                             onClick={() => router.push(`/dashboard/leads/compose?leadId=${lead.id}`)}
                             className="text-xs text-emerald-500 hover:text-emerald-300"
+                            title="Compose email"
                           >
-                            ✉️ Compose
+                            ✉️
                           </button>
                         </span>
                       </td>

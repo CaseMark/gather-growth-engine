@@ -20,6 +20,10 @@ function ComposeInner() {
   const [context, setContext] = useState<Record<string, string | null>>({});
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [accounts, setAccounts] = useState<Array<{ email: string; warmup_status: number }>>([]);
+  const [selectedFrom, setSelectedFrom] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     if (!session?.user?.id || !leadId) return;
@@ -41,6 +45,17 @@ function ComposeInner() {
       })
       .catch(() => setError("Failed to generate draft"))
       .finally(() => setLoading(false));
+
+    // Load Instantly accounts
+    fetch("/api/instantly/accounts")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.accounts) {
+          setAccounts(data.accounts);
+          if (data.accounts.length > 0) setSelectedFrom(data.accounts[0].email);
+        }
+      })
+      .catch(() => {});
   }, [session?.user?.id, leadId]);
 
   const handleCopy = () => {
@@ -48,6 +63,25 @@ function ComposeInner() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendInstantly = async () => {
+    if (!selectedFrom || !to || !subject || !body) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/leads/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: selectedFrom, to, subject, body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send");
+      setSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Send failed");
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleMailto = () => {
@@ -127,20 +161,50 @@ function ComposeInner() {
                     className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm font-mono"
                   />
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleMailto}
-                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-                  >
-                    Open in Mail App
-                  </button>
-                  <button
-                    onClick={handleCopy}
-                    className="rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
-                  >
-                    {copied ? "✓ Copied!" : "Copy to Clipboard"}
-                  </button>
-                </div>
+                {sent ? (
+                  <div className="rounded-md bg-emerald-900/30 border border-emerald-800 px-4 py-3 text-emerald-300 text-sm">
+                    ✓ Email sent via Instantly from {selectedFrom}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {accounts.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={selectedFrom}
+                          onChange={(e) => setSelectedFrom(e.target.value)}
+                          className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 text-sm"
+                        >
+                          {accounts.map((a) => (
+                            <option key={a.email} value={a.email}>
+                              {a.email} {a.warmup_status === 1 ? "✓" : a.warmup_status === 0 ? "(warming)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleSendInstantly}
+                          disabled={sending || !selectedFrom}
+                          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                        >
+                          {sending ? "Sending..." : "Send via Instantly"}
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleMailto}
+                        className="rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                      >
+                        Open in Mail App
+                      </button>
+                      <button
+                        onClick={handleCopy}
+                        className="rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                      >
+                        {copied ? "✓ Copied!" : "Copy to Clipboard"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Context sidebar — 1/3 width */}
