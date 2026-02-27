@@ -23,6 +23,7 @@ type Lead = {
   icp: string | null;
   employeeCount: string | null;
   revenue: string | null;
+  metadataJson: string | null;
   createdAt: string;
   batchId: string;
   batchName: string | null;
@@ -349,6 +350,20 @@ export default function LeadsPage() {
                             <div><span className="text-zinc-500">Batch:</span> <span className="text-zinc-300">{lead.batchName || lead.batchId}</span></div>
                             <div><span className="text-zinc-500">Added:</span> <span className="text-zinc-300">{new Date(lead.createdAt).toLocaleDateString()}</span></div>
                           </div>
+                          {(() => {
+                            try {
+                              const meta = lead.metadataJson ? JSON.parse(lead.metadataJson) : null;
+                              if (meta?.benchAnalysis) {
+                                return (
+                                  <div className="mt-3 rounded-md border border-zinc-700 bg-zinc-800/50 px-4 py-3">
+                                    <div className="text-xs font-medium text-zinc-400 mb-1">🤖 AI Analysis (Bench)</div>
+                                    <div className="text-sm text-zinc-300 whitespace-pre-wrap">{meta.benchAnalysis}</div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            } catch { return null; }
+                          })()}
                         </td>
                       </tr>
                     )}

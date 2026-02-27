@@ -40,6 +40,7 @@ export async function GET() {
             icp: true,
             employeeCount: true,
             revenue: true,
+            metadataJson: true,
             createdAt: true,
             leadBatchId: true,
           },
