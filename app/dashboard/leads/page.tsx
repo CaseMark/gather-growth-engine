@@ -327,12 +327,20 @@ export default function LeadsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
-                          className="text-xs text-zinc-500 hover:text-zinc-300"
-                        >
-                          {expandedId === lead.id ? "Hide" : "View"}
-                        </button>
+                        <span className="flex gap-2">
+                          <button
+                            onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
+                            className="text-xs text-zinc-500 hover:text-zinc-300"
+                          >
+                            {expandedId === lead.id ? "Hide" : "View"}
+                          </button>
+                          <button
+                            onClick={() => router.push(`/dashboard/leads/compose?leadId=${lead.id}`)}
+                            className="text-xs text-emerald-500 hover:text-emerald-300"
+                          >
+                            ✉️ Compose
+                          </button>
+                        </span>
                       </td>
                     </tr>
                     {expandedId === lead.id && (
