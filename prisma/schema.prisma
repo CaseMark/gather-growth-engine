@@ -191,6 +191,16 @@ model Lead {
   stepsJson          String?   // JSON: [{ subject, body }] for dynamic N steps (1..10)
   linkedinMessage    String?   // personalized LinkedIn connection request (when playbook includes LinkedIn step)
   abVariant          String?   // "A" | "B" when sent as part of A/B test
+  linkedinUrl        String?   // LinkedIn profile URL
+  city               String?
+  state              String?
+  pageVisited        String?   // URL where they were captured
+  referrer           String?   // referrer URL
+  source             String?   // e.g. "rb2b", "clerk-signup", "manual"
+  icp                String?   // ICP classification tag
+  employeeCount      String?   // company size
+  revenue            String?   // estimated revenue
+  metadataJson       String?   // arbitrary extra context as JSON
   createdAt          DateTime  @default(now())
 
   leadBatch LeadBatch @relation(fields: [leadBatchId], references: [id], onDelete: Cascade)

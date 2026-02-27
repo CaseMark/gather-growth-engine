@@ -7,6 +7,15 @@ export type NormalizedLead = {
   company?: string;
   website?: string;
   industry?: string;
+  linkedinUrl?: string;
+  city?: string;
+  state?: string;
+  pageVisited?: string;
+  referrer?: string;
+  source?: string;
+  icp?: string;
+  employeeCount?: string;
+  revenue?: string;
 };
 
 /**
@@ -62,6 +71,15 @@ export async function createBatchWithLeads(
       company: l.company?.trim() || null,
       website: l.website?.trim() || null,
       industry: l.industry?.trim() || null,
+      linkedinUrl: l.linkedinUrl?.trim() || null,
+      city: l.city?.trim() || null,
+      state: l.state?.trim() || null,
+      pageVisited: l.pageVisited?.trim() || null,
+      referrer: l.referrer?.trim() || null,
+      source: l.source?.trim() || null,
+      icp: l.icp?.trim() || null,
+      employeeCount: l.employeeCount?.trim() || null,
+      revenue: l.revenue?.trim() || null,
     })),
   });
 

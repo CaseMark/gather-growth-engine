@@ -14,6 +14,15 @@ type Lead = {
   company: string | null;
   jobTitle: string | null;
   industry: string | null;
+  linkedinUrl: string | null;
+  city: string | null;
+  state: string | null;
+  pageVisited: string | null;
+  referrer: string | null;
+  source: string | null;
+  icp: string | null;
+  employeeCount: string | null;
+  revenue: string | null;
   createdAt: string;
   batchId: string;
   batchName: string | null;
@@ -38,6 +47,8 @@ export default function LeadsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [assignCampaignId, setAssignCampaignId] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -113,6 +124,31 @@ export default function LeadsPage() {
       setMessage(e instanceof Error ? e.message : "Failed");
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} lead(s)? This cannot be undone.`)) return;
+    setDeleting(true);
+    setMessage("");
+    try {
+      const res = await fetch("/api/leads/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: Array.from(selectedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setMessage(`🗑 Deleted ${data.deleted} lead(s)`);
+      setSelectedIds(new Set());
+      const refresh = await fetch("/api/leads/all");
+      const refreshData = await refresh.json();
+      setLeads(refreshData.leads ?? []);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -207,6 +243,13 @@ export default function LeadsPage() {
                 {assigning ? "Assigning..." : "Assign"}
               </button>
               <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-md border border-red-800 px-3 py-1.5 text-sm font-medium text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+              <button
                 onClick={() => setSelectedIds(new Set())}
                 className="text-sm text-zinc-500 hover:text-zinc-300"
               >
@@ -236,14 +279,15 @@ export default function LeadsPage() {
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Email</th>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Company</th>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Title</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Source</th>
+                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">ICP</th>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Campaign</th>
+                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
                       No leads found
                     </td>
                   </tr>
@@ -263,9 +307,15 @@ export default function LeadsPage() {
                       <td className="px-4 py-3 text-zinc-400">{lead.company || "—"}</td>
                       <td className="px-4 py-3 text-zinc-400">{lead.jobTitle || "—"}</td>
                       <td className="px-4 py-3">
-                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                          {lead.batchName?.split(" ")[0] || "manual"}
-                        </span>
+                        {lead.icp ? (
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            lead.icp === "general" ? "bg-zinc-800 text-zinc-400" : "bg-emerald-900/40 text-emerald-300"
+                          }`}>
+                            {lead.icp}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-500">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {lead.campaigns.length > 0 ? (
@@ -274,7 +324,33 @@ export default function LeadsPage() {
                           <span className="text-zinc-600 text-xs">unassigned</span>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
+                          className="text-xs text-zinc-500 hover:text-zinc-300"
+                        >
+                          {expandedId === lead.id ? "Hide" : "View"}
+                        </button>
+                      </td>
                     </tr>
+                    {expandedId === lead.id && (
+                      <tr className="bg-zinc-900/60">
+                        <td colSpan={8} className="px-8 py-4">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                            {lead.source && <div><span className="text-zinc-500">Source:</span> <span className="text-zinc-300">{lead.source}</span></div>}
+                            {lead.industry && <div><span className="text-zinc-500">Industry:</span> <span className="text-zinc-300">{lead.industry}</span></div>}
+                            {(lead.city || lead.state) && <div><span className="text-zinc-500">Location:</span> <span className="text-zinc-300">{[lead.city, lead.state].filter(Boolean).join(", ")}</span></div>}
+                            {lead.employeeCount && <div><span className="text-zinc-500">Employees:</span> <span className="text-zinc-300">{lead.employeeCount}</span></div>}
+                            {lead.revenue && <div><span className="text-zinc-500">Revenue:</span> <span className="text-zinc-300">{lead.revenue}</span></div>}
+                            {lead.pageVisited && <div><span className="text-zinc-500">Page:</span> <span className="text-zinc-300 break-all">{lead.pageVisited}</span></div>}
+                            {lead.referrer && <div><span className="text-zinc-500">Referrer:</span> <span className="text-zinc-300 break-all">{lead.referrer}</span></div>}
+                            {lead.linkedinUrl && <div><span className="text-zinc-500">LinkedIn:</span> <a href={lead.linkedinUrl} target="_blank" rel="noopener" className="text-blue-400 hover:underline break-all">{lead.linkedinUrl}</a></div>}
+                            <div><span className="text-zinc-500">Batch:</span> <span className="text-zinc-300">{lead.batchName || lead.batchId}</span></div>
+                            <div><span className="text-zinc-500">Added:</span> <span className="text-zinc-300">{new Date(lead.createdAt).toLocaleDateString()}</span></div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   ))
                 )}
               </tbody>
