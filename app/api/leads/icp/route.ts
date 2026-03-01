@@ -38,16 +38,36 @@ export async function POST(request: Request) {
     }
 
     // Only update leads belonging to this workspace
-    const result = await prisma.lead.updateMany({
-      where: {
-        id: { in: leadIds },
-        leadBatch: { workspaceId: workspace.id },
-      },
-      data: {
-        icp: icp?.trim() || null,
-        icpChangedAt: new Date(),
-      },
-    });
+    // Try with icpChangedAt first; if column doesn't exist yet, fall back without it
+    let result;
+    try {
+      result = await prisma.lead.updateMany({
+        where: {
+          id: { in: leadIds },
+          leadBatch: { workspaceId: workspace.id },
+        },
+        data: {
+          icp: icp?.trim() || null,
+          icpChangedAt: new Date(),
+        },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("icpChangedAt") || msg.includes("Unknown arg")) {
+        console.warn("ICP update: icpChangedAt column not found, updating icp only. Run `npx prisma migrate deploy`.");
+        result = await prisma.lead.updateMany({
+          where: {
+            id: { in: leadIds },
+            leadBatch: { workspaceId: workspace.id },
+          },
+          data: {
+            icp: icp?.trim() || null,
+          },
+        });
+      } else {
+        throw e;
+      }
+    }
 
     return NextResponse.json({ ok: true, updated: result.count });
   } catch (error) {

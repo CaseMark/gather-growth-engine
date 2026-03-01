@@ -168,6 +168,69 @@ export async function GET(request: Request) {
       totalPages,
     });
   } catch (error) {
+    // If the error is due to missing icpChangedAt column (migration not yet applied),
+    // fall back to a query without that field.
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (errMsg.includes("icpChangedAt") || errMsg.includes("Unknown arg")) {
+      console.warn("Leads all GET: icpChangedAt column not found, falling back without it. Run `npx prisma migrate deploy` to fix.");
+      try {
+        const session2 = await getServerSession(authOptions);
+        if (!session2?.user?.id) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const workspace2 = await prisma.workspace.findUnique({
+          where: { userId: session2.user.id },
+          select: { id: true },
+        });
+        if (!workspace2) {
+          return NextResponse.json({ leads: [], campaigns: [], totalCount: 0, page: 1, pageSize: 50, totalPages: 0 });
+        }
+        // Fallback: fetch all leads without pagination to restore basic functionality
+        const batches = await prisma.leadBatch.findMany({
+          where: { workspaceId: workspace2.id },
+          include: {
+            leads: {
+              select: {
+                id: true, email: true, name: true, company: true, jobTitle: true,
+                industry: true, linkedinUrl: true, city: true, state: true,
+                pageVisited: true, referrer: true, source: true, icp: true,
+                employeeCount: true, revenue: true, metadataJson: true,
+                createdAt: true, leadBatchId: true,
+              },
+              orderBy: { createdAt: "desc" },
+            },
+            campaigns: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        const leads = batches.flatMap((batch) =>
+          batch.leads.map((lead) => ({
+            ...lead,
+            icpChangedAt: null,
+            batchName: batch.name,
+            batchId: batch.id,
+            campaigns: batch.campaigns.map((c) => ({ id: c.id, name: c.name })),
+          }))
+        );
+        const campaigns = await prisma.campaign.findMany({
+          where: { workspaceId: workspace2.id },
+          select: { id: true, name: true, status: true, leadBatchId: true },
+          orderBy: { createdAt: "desc" },
+        });
+        return NextResponse.json({
+          leads,
+          campaigns,
+          totalCount: leads.length,
+          page: 1,
+          pageSize: leads.length || 50,
+          totalPages: 1,
+          _migrationPending: true,
+        });
+      } catch (fallbackError) {
+        console.error("Leads all GET fallback error:", fallbackError);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+      }
+    }
     console.error("Leads all GET error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
