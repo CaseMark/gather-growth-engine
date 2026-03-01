@@ -365,21 +365,41 @@ function createInstantlyClient(apiKey: string) {
       return request("POST", `/campaigns/${campaignId}/pause`);
     },
 
-    /** Send a one-off email via Instantly Unibox. */
+    /**
+     * Send a one-off email via Instantly.
+     * V2 has no direct "send new email" endpoint, so we create a single-lead,
+     * single-step campaign, activate it, and let Instantly deliver it.
+     * The campaign is named with a timestamp so it's identifiable in the dashboard.
+     */
     async sendEmail(opts: {
       from: string;       // sending account email
       to: string;         // recipient email
       subject: string;
       body: string;       // HTML or plain text
-      eoi?: string;       // email_of_interest (for threading)
-    }): Promise<unknown> {
-      return request("POST", `/unibox/emails`, {
-        from_address_email: opts.from,
-        to_address_email_list: [opts.to],
-        subject: opts.subject,
-        body: opts.body.replace(/\n/g, "<br>"),
-        eoi: opts.eoi || opts.to,
+    }): Promise<{ campaignId: string }> {
+      const htmlBody = opts.body.replace(/\n/g, "<br>");
+      const campaignName = `One-off: ${opts.to} (${new Date().toISOString().slice(0, 16)})`;
+      const created = await this.createCampaign(campaignName, {
+        email_list: [opts.from],
+        sequenceSteps: [{ subject: opts.subject, body: htmlBody, delayDays: 0 }],
+        delayUnit: "minutes",
       });
+      const campaignId = created.id;
+
+      // Add the single lead
+      await this.bulkAddLeadsToCampaign(campaignId, [
+        {
+          email: opts.to,
+          first_name: null,
+          last_name: null,
+          company_name: null,
+        },
+      ], { verify_leads_on_import: false });
+
+      // Activate so Instantly sends it
+      await this.activateCampaign(campaignId);
+
+      return { campaignId };
     },
 
     /** Get campaign analytics (opens, clicks, sent, etc.). */
