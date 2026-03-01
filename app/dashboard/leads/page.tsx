@@ -381,11 +381,11 @@ function LeadsPageInner() {
           )}
 
           {/* Lead table */}
-          <div className="rounded-lg border border-zinc-800 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-zinc-800 overflow-x-auto">
+            <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-zinc-900/80">
-                <tr>
-                  <th className="px-4 py-3 text-left">
+                <tr className="whitespace-nowrap">
+                  <th className="px-3 py-3 text-left w-10">
                     <input
                       type="checkbox"
                       checked={leads.length > 0 && selectedIds.size === leads.length}
@@ -393,14 +393,14 @@ function LeadsPageInner() {
                       className="rounded border-zinc-600 bg-zinc-800 text-emerald-600"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Name</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Email</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Company</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Title</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">ICP</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Campaign</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Contacted</th>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Details</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Name</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Email</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Company</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Title</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">ICP</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Campaign</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Contacted</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
@@ -413,8 +413,8 @@ function LeadsPageInner() {
                 ) : (
                   leads.map((lead) => (
                     <Fragment key={lead.id}>
-                    <tr className="hover:bg-zinc-900/40">
-                      <td className="px-4 py-3">
+                    <tr className="hover:bg-zinc-900/40 whitespace-nowrap">
+                      <td className="px-3 py-3">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(lead.id)}
@@ -422,27 +422,27 @@ function LeadsPageInner() {
                           className="rounded border-zinc-600 bg-zinc-800 text-emerald-600"
                         />
                       </td>
-                      <td className="px-4 py-3 text-zinc-200">{lead.name || "\u2014"}</td>
-                      <td className="px-4 py-3 text-zinc-300">{lead.email}</td>
-                      <td className="px-4 py-3 text-zinc-400">{lead.company || "\u2014"}</td>
-                      <td className="px-4 py-3 text-zinc-400">{lead.jobTitle || "\u2014"}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-zinc-200 max-w-[140px] truncate">{lead.name || "\u2014"}</td>
+                      <td className="px-3 py-3 text-zinc-300 max-w-[180px] truncate">{lead.email}</td>
+                      <td className="px-3 py-3 text-zinc-400 max-w-[120px] truncate">{lead.company || "\u2014"}</td>
+                      <td className="px-3 py-3 text-zinc-400 max-w-[120px] truncate">{lead.jobTitle || "\u2014"}</td>
+                      <td className="px-3 py-3">
                         <IcpDropdown
                           value={lead.icp ?? ""}
                           options={icpOptions}
                           onChange={(val) => handleIcpChange(lead.id, val)}
                           disabled={updatingIcpLeadId === lead.id}
-                          className="w-full min-w-[120px] rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200"
+                          className="w-full min-w-[100px] rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200"
                         />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         {lead.campaigns.length > 0 ? (
                           <span className="text-emerald-400 text-xs">{lead.campaigns[0].name}</span>
                         ) : (
                           <span className="text-zinc-600 text-xs">unassigned</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         {lead.lastContactedAt ? (
                           <span className="text-amber-400 text-xs" title={new Date(lead.lastContactedAt).toLocaleString()}>
                             {(() => {
@@ -461,7 +461,7 @@ function LeadsPageInner() {
                           <span className="text-zinc-600 text-xs">--</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <span className="flex gap-2">
                           <button
                             onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
