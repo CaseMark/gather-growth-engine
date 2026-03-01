@@ -107,6 +107,7 @@ export async function GET(request: Request) {
         source: true,
         icp: true,
         icpChangedAt: true,
+        lastContactedAt: true,
         employeeCount: true,
         revenue: true,
         metadataJson: true,
@@ -143,6 +144,7 @@ export async function GET(request: Request) {
       source: lead.source,
       icp: lead.icp,
       icpChangedAt: lead.icpChangedAt,
+      lastContactedAt: lead.lastContactedAt,
       employeeCount: lead.employeeCount,
       revenue: lead.revenue,
       metadataJson: lead.metadataJson,
@@ -207,6 +209,7 @@ export async function GET(request: Request) {
           batch.leads.map((lead) => ({
             ...lead,
             icpChangedAt: null,
+            lastContactedAt: null,
             batchName: batch.name,
             batchId: batch.id,
             campaigns: batch.campaigns.map((c) => ({ id: c.id, name: c.name })),

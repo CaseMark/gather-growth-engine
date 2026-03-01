@@ -22,6 +22,7 @@ type Lead = {
   source: string | null;
   icp: string | null;
   icpChangedAt: string | null;
+  lastContactedAt: string | null;
   employeeCount: string | null;
   revenue: string | null;
   metadataJson: string | null;
@@ -398,13 +399,14 @@ function LeadsPageInner() {
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Title</th>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">ICP</th>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Campaign</th>
+                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Contacted</th>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                       {loading ? "Loading..." : "No leads found"}
                     </td>
                   </tr>
@@ -441,6 +443,25 @@ function LeadsPageInner() {
                         )}
                       </td>
                       <td className="px-4 py-3">
+                        {lead.lastContactedAt ? (
+                          <span className="text-amber-400 text-xs" title={new Date(lead.lastContactedAt).toLocaleString()}>
+                            {(() => {
+                              const d = new Date(lead.lastContactedAt);
+                              const now = new Date();
+                              const diffMs = now.getTime() - d.getTime();
+                              const diffMins = Math.floor(diffMs / 60000);
+                              if (diffMins < 60) return `${diffMins}m ago`;
+                              const diffHrs = Math.floor(diffMins / 60);
+                              if (diffHrs < 24) return `${diffHrs}h ago`;
+                              const diffDays = Math.floor(diffHrs / 24);
+                              return `${diffDays}d ago`;
+                            })()}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600 text-xs">--</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <span className="flex gap-2">
                           <button
                             onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
@@ -460,7 +481,7 @@ function LeadsPageInner() {
                     </tr>
                     {expandedId === lead.id && (
                       <tr className="bg-zinc-900/60">
-                        <td colSpan={8} className="px-8 py-4">
+                        <td colSpan={9} className="px-8 py-4">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                             {lead.source && <div><span className="text-zinc-500">Source:</span> <span className="text-zinc-300">{lead.source}</span></div>}
                             {lead.industry && <div><span className="text-zinc-500">Industry:</span> <span className="text-zinc-300">{lead.industry}</span></div>}
@@ -474,6 +495,9 @@ function LeadsPageInner() {
                             <div><span className="text-zinc-500">Added:</span> <span className="text-zinc-300">{new Date(lead.createdAt).toLocaleDateString()}</span></div>
                             {lead.icpChangedAt && (
                               <div><span className="text-zinc-500">ICP changed:</span> <span className="text-zinc-300">{new Date(lead.icpChangedAt).toLocaleString()}</span></div>
+                            )}
+                            {lead.lastContactedAt && (
+                              <div><span className="text-zinc-500">Last contacted:</span> <span className="text-amber-400">{new Date(lead.lastContactedAt).toLocaleString()}</span></div>
                             )}
                           </div>
                           {(() => {

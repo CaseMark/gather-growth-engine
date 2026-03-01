@@ -199,6 +199,7 @@ model Lead {
   source             String?   // e.g. "rb2b", "clerk-signup", "manual"
   icp                String?   // ICP classification tag
   icpChangedAt       DateTime? // timestamp of last ICP change (used for 2-min grace period before sequences)
+  lastContactedAt    DateTime? // timestamp of last email sent to this lead (one-off or campaign)
   employeeCount      String?   // company size
   revenue            String?   // estimated revenue
   metadataJson       String?   // arbitrary extra context as JSON
