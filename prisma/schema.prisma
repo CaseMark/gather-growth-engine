@@ -198,6 +198,7 @@ model Lead {
   referrer           String?   // referrer URL
   source             String?   // e.g. "rb2b", "clerk-signup", "manual"
   icp                String?   // ICP classification tag
+  icpChangedAt       DateTime? // timestamp of last ICP change (used for 2-min grace period before sequences)
   employeeCount      String?   // company size
   revenue            String?   // estimated revenue
   metadataJson       String?   // arbitrary extra context as JSON

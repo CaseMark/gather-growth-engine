@@ -76,6 +76,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Batch has no leads" }, { status: 400 });
     }
 
+    // 2-minute grace period: exclude leads whose ICP was changed within the last 2 minutes.
+    // This prevents accidentally sending sequences to leads that were just re-classified.
+    const ICP_GRACE_PERIOD_MS = 2 * 60 * 1000; // 2 minutes
+    const now = Date.now();
+    const leadsInGracePeriod = batch.leads.filter(
+      (l) => l.icpChangedAt && now - new Date(l.icpChangedAt).getTime() < ICP_GRACE_PERIOD_MS
+    );
+    const eligibleLeads = batch.leads.filter(
+      (l) => !l.icpChangedAt || now - new Date(l.icpChangedAt).getTime() >= ICP_GRACE_PERIOD_MS
+    );
+
+    if (eligibleLeads.length === 0 && leadsInGracePeriod.length > 0) {
+      const readyAt = new Date(
+        Math.max(...leadsInGracePeriod.map((l) => new Date(l.icpChangedAt!).getTime() + ICP_GRACE_PERIOD_MS))
+      );
+      return NextResponse.json(
+        {
+          error: `All ${leadsInGracePeriod.length} lead(s) in this batch had their ICP changed within the last 2 minutes. Wait until ${readyAt.toLocaleTimeString()} before sending, or change the ICP back if it was a mistake.`,
+          gracePeriod: {
+            leadsHeld: leadsInGracePeriod.length,
+            readyAt: readyAt.toISOString(),
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // Replace batch.leads reference with eligible leads for the rest of the flow
+    // (leadsInGracePeriod are held back with a warning)
+    const gracePeriodWarning = leadsInGracePeriod.length > 0
+      ? `${leadsInGracePeriod.length} lead(s) excluded due to ICP change within the last 2 minutes.`
+      : undefined;
+    // Overwrite batch.leads with only eligible leads
+    batch.leads = eligibleLeads;
+
     const ctx = await getInstantlyClientForUserId(session.user.id);
     if (!ctx) {
       return NextResponse.json(
@@ -313,7 +348,8 @@ export async function POST(request: Request) {
         duplicated_leads: resA.duplicated_leads + resB.duplicated_leads,
         in_blocklist: resA.in_blocklist + resB.in_blocklist,
         validation: { numSteps, leadsSent: leadsA.length + leadsB.length, allStepsPassed: true },
-        message: `A/B campaigns "${nameA}" and "${nameB}" created and activated (${leadsA.length} vs ${leadsB.length} leads). Each step sent as a separate email.`,
+        gracePeriodWarning,
+        message: `A/B campaigns "${nameA}" and "${nameB}" created and activated (${leadsA.length} vs ${leadsB.length} leads). Each step sent as a separate email.${gracePeriodWarning ? ` Note: ${gracePeriodWarning}` : ""}`,
       });
     }
 
@@ -374,7 +410,8 @@ export async function POST(request: Request) {
       duplicated_leads: addResult.duplicated_leads,
       in_blocklist: addResult.in_blocklist,
       validation: { numSteps, leadsSent: leadsPassingAllSteps.length, allStepsPassed: true },
-      message: `Campaign "${campaignName}" created and activated. ${leadsPassingAllSteps.length} leads; each of ${numSteps} steps goes out as a separate email with 2–3 day gaps.`,
+      gracePeriodWarning,
+      message: `Campaign "${campaignName}" created and activated. ${leadsPassingAllSteps.length} leads; each of ${numSteps} steps goes out as a separate email with 2–3 day gaps.${gracePeriodWarning ? ` Note: ${gracePeriodWarning}` : ""}`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send to Instantly";
