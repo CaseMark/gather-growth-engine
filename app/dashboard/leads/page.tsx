@@ -427,6 +427,29 @@ function LeadsPageInner() {
                       <td className="px-3 py-3 text-zinc-300 max-w-[180px] truncate">{lead.email}</td>
                       <td className="px-3 py-3 text-zinc-400 max-w-[120px] truncate">{lead.company || "\u2014"}</td>
                       <td className="px-3 py-3 text-zinc-400 max-w-[120px] truncate">{lead.jobTitle || "\u2014"}</td>
+                      <td className="px-3 py-3 max-w-[180px] truncate">
+                        {lead.pageVisited ? (
+                          <a
+                            href={lead.pageVisited}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                            title={lead.pageVisited}
+                          >
+                            {(() => {
+                              try {
+                                const u = new URL(lead.pageVisited);
+                                const path = u.pathname === "/" ? u.hostname : u.pathname.replace(/^\//, "");
+                                return path.length > 35 ? path.slice(0, 35) + "\u2026" : path;
+                              } catch {
+                                return lead.pageVisited.slice(0, 35);
+                              }
+                            })()}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-600 text-xs">\u2014</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3">
                         <IcpDropdown
                           value={lead.icp ?? ""}
