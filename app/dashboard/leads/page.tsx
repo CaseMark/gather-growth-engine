@@ -397,6 +397,7 @@ function LeadsPageInner() {
                   <th className="px-3 py-3 text-left text-zinc-400 font-medium">Email</th>
                   <th className="px-3 py-3 text-left text-zinc-400 font-medium">Company</th>
                   <th className="px-3 py-3 text-left text-zinc-400 font-medium">Title</th>
+                  <th className="px-3 py-3 text-left text-zinc-400 font-medium">Page Visited</th>
                   <th className="px-3 py-3 text-left text-zinc-400 font-medium">ICP</th>
                   <th className="px-3 py-3 text-left text-zinc-400 font-medium">Campaign</th>
                   <th className="px-3 py-3 text-left text-zinc-400 font-medium">Contacted</th>
@@ -406,7 +407,7 @@ function LeadsPageInner() {
               <tbody className="divide-y divide-zinc-800">
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={10} className="px-4 py-8 text-center text-zinc-500">
                       {loading ? "Loading..." : "No leads found"}
                     </td>
                   </tr>
@@ -426,6 +427,29 @@ function LeadsPageInner() {
                       <td className="px-3 py-3 text-zinc-300 max-w-[180px] truncate">{lead.email}</td>
                       <td className="px-3 py-3 text-zinc-400 max-w-[120px] truncate">{lead.company || "\u2014"}</td>
                       <td className="px-3 py-3 text-zinc-400 max-w-[120px] truncate">{lead.jobTitle || "\u2014"}</td>
+                      <td className="px-3 py-3 max-w-[180px] truncate">
+                        {lead.pageVisited ? (
+                          <a
+                            href={lead.pageVisited}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                            title={lead.pageVisited}
+                          >
+                            {(() => {
+                              try {
+                                const u = new URL(lead.pageVisited);
+                                const path = u.pathname === "/" ? u.hostname : u.pathname.replace(/^\//, "");
+                                return path.length > 35 ? path.slice(0, 35) + "\u2026" : path;
+                              } catch {
+                                return lead.pageVisited.slice(0, 35);
+                              }
+                            })()}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-600 text-xs">\u2014</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3">
                         <IcpDropdown
                           value={lead.icp ?? ""}
@@ -481,7 +505,7 @@ function LeadsPageInner() {
                     </tr>
                     {expandedId === lead.id && (
                       <tr className="bg-zinc-900/60">
-                        <td colSpan={9} className="px-8 py-4">
+                        <td colSpan={10} className="px-8 py-4">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                             {lead.source && <div><span className="text-zinc-500">Source:</span> <span className="text-zinc-300">{lead.source}</span></div>}
                             {lead.industry && <div><span className="text-zinc-500">Industry:</span> <span className="text-zinc-300">{lead.industry}</span></div>}
