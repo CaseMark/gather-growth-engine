@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createBatchWithLeads, NormalizedLead } from "@/lib/leads";
+import { autoEnrollAsync } from "@/lib/auto-enroll";
 
 /**
  * POST /api/leads/ingest
@@ -142,6 +143,15 @@ export async function POST(request: Request) {
             });
           }
           autoAssignedCampaign = match.name;
+
+          // Auto-enroll: fire-and-forget — verify, generate sequences, add to running Instantly campaign
+          if (ingestBatchLeads.length > 0) {
+            autoEnrollAsync({
+              workspaceId: workspace.id,
+              campaignId: match.id,
+              leadIds: ingestBatchLeads.map((l) => l.id),
+            });
+          }
         }
       }
     }
@@ -152,6 +162,7 @@ export async function POST(request: Request) {
       count,
       skippedDuplicate,
       autoAssignedCampaign,
+      autoEnroll: autoAssignedCampaign ? "triggered" : undefined,
     });
   } catch (error) {
     console.error("Ingest error:", error);
